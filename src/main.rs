@@ -18,16 +18,9 @@ use cgmath::{
 const IMG_WIDTH: usize = 200;
 const IMG_HEIGHT: usize = 100;
 
-//
 fn write_image(filename: &String, data: &[u8], width: u32, height: u32) -> io::Result<()> {
     let mut file = File::create(filename).unwrap();
     let enc = PNGEncoder::new(file);
-    /*let mut data: [u8; 3 * IMG_SIZE * IMG_SIZE]  = [0; 3 * IMG_SIZE * IMG_SIZE];
-    let mut rng = rand::thread_rng();
-    for i in 0..(3 * IMG_SIZE * IMG_SIZE) {
-        let n1: u8 = rng.gen();
-        data[i] = n1;
-    }*/
     enc.encode(
         &data,
         width,
@@ -96,8 +89,9 @@ fn gradient_color(r: &Ray) -> Vector3<f32> {
     return (1.0-t) * Vector3::new(1.0, 1.0, 1.0) + t * Vector3::new(0.5, 0.7, 1.0);
 }
 
-fn trace(r: &Ray) -> Vector3<f32> {
-    let sphere_center = Vector3::new(0.0, 0.0, 1.0);
+fn trace(r: &Ray, x: usize, y: usize, u: f32, v: f32) -> Vector3<f32> {
+
+    let sphere_center = Vector3::new(0.0, 0.0, -1.0);
     let (is_hit, surface_norm_t) = hit_sphere(
         sphere_center,
         0.5,
@@ -108,12 +102,15 @@ fn trace(r: &Ray) -> Vector3<f32> {
             //&(r.point(surface_norm_t) - Vector3::new(0.0, 0.0, -1.0))
             &(r.point(surface_norm_t) - sphere_center)
         );
-        println!("xyz = ({}, {}, {})", n.x, n.y, -1.0*n.z);
+        //println!("t = {}", surface_norm_t)
+        println!("\n\nFor Ray ======> {:?} {:?}", r.A, r.B);
+        println!("uv = {} {}", u, v);
+        println!("XY => {} {}", x, y);
+        println!("xyz = ({}, {}, {})", n.x, n.y, n.z);
         return 0.5 * Vector3::new(
             n.x+1.0,
             n.y+1.0,
             n.z+1.0
-            //-1.0*n.z+1.0
         );
         //return Vector3::new(1.0, 0.0, 0.0)
     }
@@ -124,13 +121,25 @@ fn hit_sphere(center: Vector3<f32>, radius: f32, ray: &Ray) -> (bool, f32) {
     let oc = ray.origin() - center;
     let a = ray.direction().dot(*ray.direction());
     let b = 2.0 * oc.dot(*ray.direction());
-    let c = oc.dot(oc) - (radius*radius);
-    let d = (b*b) - (4.0*a*c);
+    let c = oc.dot(oc) - radius*radius;
+    let d = b*b - 4.0*a*c;
+
+    if d > 0.0 {
+        println!("--- Hit Dump ---");
+        println!("ray = {:?} {:?}", ray.A, ray.B);
+        println!("oc = {:?}", oc);
+        println!("a = {}", a);
+        println!("b = {}", b);
+        println!("c = {}", c);
+        println!("d = {}", d);
+    }
+
     (
         d > 0.0,
-        (-1.0 * b) - (d.sqrt() / (2.0*a))
+        (-1.0 * b - d.sqrt()) / (2.0 * a) 
     )
 }
+
 
 fn main() {
     println!("Time for some raytracing!");
@@ -148,8 +157,8 @@ fn main() {
     }*/
 
     // note: unlike in the book, i'm orienting my camera in the positive z
-    // direction, i'm not sure why but this seems to give better results.
-    let lower_left = Vector3::new(-2.0, -1.0, 1.0);
+    // direction, i'm not sure why but this seems to give better results
+    let lower_left = Vector3::new(-2.0, -1.0, -1.0);
     let horizontal = Vector3::new(4.0, 0.0, 0.0);
     let vertical = Vector3::new(0.0, 2.0, 0.0);
     let origin = Vector3::new(0.0, 0.0, 0.0);
@@ -157,14 +166,16 @@ fn main() {
         for x in (0..IMG_WIDTH) {
             let index = (y * IMG_WIDTH + x) * 3;
             let u: f32 = x as f32 / IMG_WIDTH as f32;
-            let v: f32 = (IMG_HEIGHT as f32 - y as f32) / IMG_HEIGHT as f32;
+            let v: f32 = ((IMG_HEIGHT - y) as f32) / IMG_HEIGHT as f32;
             //let v: f32 = y as f32 / IMG_HEIGHT as f32;
+            
+            //println!("offset = {:?}", ((u * horizontal) + (v * vertical)));
             let r = Ray::new(
                 origin,
-                lower_left + u * horizontal + v * vertical
+                unit_vector(&(lower_left + ((u * horizontal) + (v * vertical))))
             );
 
-            let color = trace(&r);
+            let color = trace(&r, x, IMG_HEIGHT - y, u, v);
             data[index] = (color.x * 255.99) as u8;
             data[index+1] = (color.y * 255.99) as u8;
             data[index+2] = (color.z * 255.99) as u8;
