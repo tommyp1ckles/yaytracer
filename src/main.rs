@@ -102,17 +102,18 @@ fn trace(r: &Ray, x: usize, y: usize, u: f32, v: f32) -> Vector3<f32> {
             //&(r.point(surface_norm_t) - Vector3::new(0.0, 0.0, -1.0))
             &(r.point(surface_norm_t) - sphere_center)
         );
-        //println!("t = {}", surface_norm_t)
-        println!("\n\nFor Ray ======> {:?} {:?}", r.A, r.B);
-        println!("uv = {} {}", u, v);
-        println!("XY => {} {}", x, y);
-        println!("xyz = ({}, {}, {})", n.x, n.y, n.z);
+
+        if cfg!(debug = "1") {
+            println!("\n\nFor Ray ======> {:?} {:?}", r.A, r.B);
+            println!("uv = {} {}", u, v);
+            println!("XY => {} {}", x, y);
+            println!("xyz = ({}, {}, {})", n.x, n.y, n.z);
+        }
         return 0.5 * Vector3::new(
             n.x+1.0,
             n.y+1.0,
             n.z+1.0
         );
-        //return Vector3::new(1.0, 0.0, 0.0)
     }
     gradient_color(r)
 }
@@ -124,7 +125,7 @@ fn hit_sphere(center: Vector3<f32>, radius: f32, ray: &Ray) -> (bool, f32) {
     let c = oc.dot(oc) - radius*radius;
     let d = b*b - 4.0*a*c;
 
-    if d > 0.0 {
+    /*if d > 0.0 {
         println!("--- Hit Dump ---");
         println!("ray = {:?} {:?}", ray.A, ray.B);
         println!("oc = {:?}", oc);
@@ -132,7 +133,7 @@ fn hit_sphere(center: Vector3<f32>, radius: f32, ray: &Ray) -> (bool, f32) {
         println!("b = {}", b);
         println!("c = {}", c);
         println!("d = {}", d);
-    }
+    }*/
 
     (
         d > 0.0,
@@ -141,23 +142,11 @@ fn hit_sphere(center: Vector3<f32>, radius: f32, ray: &Ray) -> (bool, f32) {
 }
 
 
+
 fn main() {
     println!("Time for some raytracing!");
-    //let color = Rgb{
-    //    data: [0, 0, 0]
-    //};
-    //println!("Color: {:?}", color);
-
-    //write_image(&String::from("some_file.png"));
-
     let mut data: [u8; 3 * IMG_HEIGHT * IMG_WIDTH] = [0; 3 * IMG_HEIGHT * IMG_WIDTH];
-    /*let mut rng = rand::thread_rng();
-    for i in 0..(3 * IMG_HEIGHT * IMG_WIDTH) {
-        data[i] = rng.gen();
-    }*/
 
-    // note: unlike in the book, i'm orienting my camera in the positive z
-    // direction, i'm not sure why but this seems to give better results
     let lower_left = Vector3::new(-2.0, -1.0, -1.0);
     let horizontal = Vector3::new(4.0, 0.0, 0.0);
     let vertical = Vector3::new(0.0, 2.0, 0.0);
@@ -167,9 +156,7 @@ fn main() {
             let index = (y * IMG_WIDTH + x) * 3;
             let u: f32 = x as f32 / IMG_WIDTH as f32;
             let v: f32 = ((IMG_HEIGHT - y) as f32) / IMG_HEIGHT as f32;
-            //let v: f32 = y as f32 / IMG_HEIGHT as f32;
-            
-            //println!("offset = {:?}", ((u * horizontal) + (v * vertical)));
+
             let r = Ray::new(
                 origin,
                 unit_vector(&(lower_left + ((u * horizontal) + (v * vertical))))
