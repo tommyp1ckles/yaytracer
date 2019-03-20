@@ -69,7 +69,13 @@ mod tests{
         assert_eq!(p.x, 1.0);
         assert_eq!(p.y, 1.0);
         assert_eq!(p.z, 1.0);
-        Vector3::new(1.0, 2.0, 3.0).dot(Vector3::new(3.0, 4.0, 1.0))
+        Vector3::new(1.0, 2.0, 3.0).dot(Vector3::new(3.0, 4.0, 1.0));
+    }
+
+    #[test]
+    fn test_unit_vector() {
+        let v = unit_vector(&Vector3::new(2.0, 2.0, 2.0));
+        assert_eq!(v.x, 0.57735026);
     }
 }
 
@@ -90,24 +96,40 @@ fn gradient_color(r: &Ray) -> Vector3<f32> {
     return (1.0-t) * Vector3::new(1.0, 1.0, 1.0) + t * Vector3::new(0.5, 0.7, 1.0);
 }
 
-fn test(v: Vector3<f32>) {
-    v.dot(v);
-}
-
 fn trace(r: &Ray) -> Vector3<f32> {
-    if hit_sphere(Vector3::new(0.0, 0.0, -1.0), 0.5, r) {
-        return Vector3::new(1.0, 0.0, 0.0)
+    let sphere_center = Vector3::new(0.0, 0.0, 1.0);
+    let (is_hit, surface_norm_t) = hit_sphere(
+        sphere_center,
+        0.5,
+        r
+    );
+    if is_hit {
+        let n = unit_vector(
+            //&(r.point(surface_norm_t) - Vector3::new(0.0, 0.0, -1.0))
+            &(r.point(surface_norm_t) - sphere_center)
+        );
+        println!("xyz = ({}, {}, {})", n.x, n.y, -1.0*n.z);
+        return 0.5 * Vector3::new(
+            n.x+1.0,
+            n.y+1.0,
+            n.z+1.0
+            //-1.0*n.z+1.0
+        );
+        //return Vector3::new(1.0, 0.0, 0.0)
     }
     gradient_color(r)
 }
 
-fn hit_sphere(center: Vector3<f32>, radius: f32, ray: &Ray) -> bool {
+fn hit_sphere(center: Vector3<f32>, radius: f32, ray: &Ray) -> (bool, f32) {
     let oc = ray.origin() - center;
     let a = ray.direction().dot(*ray.direction());
     let b = 2.0 * oc.dot(*ray.direction());
     let c = oc.dot(oc) - (radius*radius);
-    let d = b*b - 4.0*a*c;
-    (d > 0.0)
+    let d = (b*b) - (4.0*a*c);
+    (
+        d > 0.0,
+        (-1.0 * b) - (d.sqrt() / (2.0*a))
+    )
 }
 
 fn main() {
@@ -125,7 +147,9 @@ fn main() {
         data[i] = rng.gen();
     }*/
 
-    let lower_left = Vector3::new(-2.0, -1.0, -1.0);
+    // note: unlike in the book, i'm orienting my camera in the positive z
+    // direction, i'm not sure why but this seems to give better results.
+    let lower_left = Vector3::new(-2.0, -1.0, 1.0);
     let horizontal = Vector3::new(4.0, 0.0, 0.0);
     let vertical = Vector3::new(0.0, 2.0, 0.0);
     let origin = Vector3::new(0.0, 0.0, 0.0);
@@ -134,7 +158,7 @@ fn main() {
             let index = (y * IMG_WIDTH + x) * 3;
             let u: f32 = x as f32 / IMG_WIDTH as f32;
             let v: f32 = (IMG_HEIGHT as f32 - y as f32) / IMG_HEIGHT as f32;
-
+            //let v: f32 = y as f32 / IMG_HEIGHT as f32;
             let r = Ray::new(
                 origin,
                 lower_left + u * horizontal + v * vertical
@@ -148,7 +172,7 @@ fn main() {
     }
 
     let r = write_image(
-        &String::from("out3.png"),
+        &String::from("out5.png"),
         &data,
         IMG_WIDTH as u32,
         IMG_HEIGHT as u32   
