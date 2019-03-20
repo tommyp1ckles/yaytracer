@@ -1,0 +1,10 @@
+[package]
+name = "yaytracer"
+version = "0.1.0"
+authors = ["tomha"]
+edition = "2018"
+
+[dependencies]
+image = "0.21.0"
+rand = "0.6.5"
+cgmath = "0.17.0"
