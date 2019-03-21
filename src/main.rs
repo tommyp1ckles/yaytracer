@@ -89,28 +89,56 @@ fn gradient_color(r: &Ray) -> Vector3<f32> {
     return (1.0-t) * Vector3::new(1.0, 1.0, 1.0) + t * Vector3::new(0.5, 0.7, 1.0);
 }
 
+const T_MAX: f32 = 10000.0;
+const T_MIN: f32 = 0.0;
+
 fn trace(r: &Ray, x: usize, y: usize, u: f32, v: f32) -> Vector3<f32> {
 
-    let sphere_center = Vector3::new(0.0, 0.0, -1.0);
-    let (is_hit, surface_norm_t) = hit_sphere(
-        sphere_center,
-        0.5,
-        r
-    );
+    let mut objects: Vec<Box<Visible>> = Vec::new();
+    objects.push(Box::new(
+        Sphere::new(
+            Vector3::new(0.0, 0.0, -1.0),
+            0.5
+        )
+    ));
 
-    let sphere0 = Sphere::new(
-        Vector3::new(0.0, 0.0, -1.0),
-        0.5
-    );
+    /*objects.push(Box::new(
+        Sphere::new(
+            Vector3::new(0.0, -3.0, -1.0),
+            3.0
+        )
+    ));*/
+    
+    objects.push(Box::new(
+        Sphere::new(
+            Vector3::new(0.0, -100.5, -1.0),
+            100.0
+        )
+    ));
 
-    let hit = sphere0.hit(r, -1000.0, 1000.0);
+    let mut hit = Hit{
+        is_hit: false,
+        t: 0.0,
+        point: Vector3::new(0.0, 0.0, 0.0),
+        norm: Vector3::new(0.0, 0.0, 0.0)
+    };
+    let mut closest = T_MAX; 
+    let mut hit_exists = false;
+    for object in objects.iter() {
+        let tmp_hit = object.hit(r, T_MIN, closest);
+        if x == 0 && y == 90 {
+            println!("?hit = {}", tmp_hit.is_hit);
+        }
 
-    if hit.is_hit {
-        let n = unit_vector(
-            //&(r.point(surface_norm_t) - Vector3::new(0.0, 0.0, -1.0))
-            &(r.point(surface_norm_t) - sphere_center)
-        );
+        if tmp_hit.is_hit {
+            closest = tmp_hit.t;
+            hit_exists = true;
+            hit = tmp_hit;
+        }
+    }
 
+
+    if hit_exists {
         if cfg!(debug = "1") {
             println!("\n\nFor Ray ======> {:?} {:?}", r.A, r.B);
             println!("uv = {} {}", u, v);
@@ -178,15 +206,23 @@ impl Visible for Sphere {
     fn hit(&self, ray: &Ray, t_min: f32, t_max: f32) -> Hit {
         let oc = ray.origin() - self.center;
         let a = ray.direction().dot(*ray.direction());
-        let b = 2.0*oc.dot(*ray.direction());
+        let b = 2.0 * oc.dot(*ray.direction());
         let c = oc.dot(oc) - self.radius*self.radius;
-        let d = b*b - 4.0*a*c;
+        let d = b*b - 4.0 * a*c;
 
+        /*println!("--- Hit Dump ---");
+        println!("ray = {:?} {:?}", ray.A, ray.B);
+        println!("oc = {:?}", oc);
+        println!("a = {}", a);
+        println!("b = {}", b);
+        println!("c = {}", c);
+        println!("d = {}", oc.dot(*ray.direction())*oc.dot(*ray.direction()) - a*c);*/
         if d > 0.0 {
             let root_a = (-1.0 * b - d.sqrt())/(2.0*a);
             let root_b = (-1.0 * b + d.sqrt())/(2.0*a);
+
             // todo: write a macro for this.
-            if root_a <= t_max && root_a >= t_min {
+            if root_a < t_max && root_a > t_min {
                 let p = ray.point(root_a);
                 return Hit{
                     is_hit: true,
@@ -196,7 +232,7 @@ impl Visible for Sphere {
                 };
             }
 
-            if root_b <= t_max && root_b >= t_min {
+            if root_b < t_max && root_b > t_min {
                 let p = ray.point(root_b);
                 return Hit{
                     is_hit: true,
@@ -215,6 +251,8 @@ impl Visible for Sphere {
         }
     }
 }
+
+const ANTI_ALIASING_SAMPLE: i32 = 4;
 
 fn main() {
     println!("Time for some raytracing!");
@@ -235,6 +273,12 @@ fn main() {
                 unit_vector(&(lower_left + ((u * horizontal) + (v * vertical))))
             );
 
+            /*for sample in 0..ANTI_ALIASING_SAMPLE {
+                let u: f32 = x as f32 / IMG_WIDTH as f32;
+                let v: f32 = ((IMG_HEIGHT - y) as f32) / IMG_HEIGHT as f32;
+
+            }*/
+
             let color = trace(&r, x, IMG_HEIGHT - y, u, v);
             data[index] = (color.x * 255.99) as u8;
             data[index+1] = (color.y * 255.99) as u8;
@@ -243,7 +287,7 @@ fn main() {
     }
 
     let r = write_image(
-        &String::from("out5.png"),
+        &String::from("out6.png"),
         &data,
         IMG_WIDTH as u32,
         IMG_HEIGHT as u32   
