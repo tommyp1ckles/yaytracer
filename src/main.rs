@@ -252,7 +252,7 @@ impl Visible for Sphere {
     }
 }
 
-const ANTI_ALIASING_SAMPLE: i32 = 4;
+const ANTI_ALIASING_SAMPLE: i32 = 100;
 
 fn main() {
     println!("Time for some raytracing!");
@@ -267,22 +267,34 @@ fn main() {
             let index = (y * IMG_WIDTH + x) * 3;
             let u: f32 = x as f32 / IMG_WIDTH as f32;
             let v: f32 = ((IMG_HEIGHT - y) as f32) / IMG_HEIGHT as f32;
+            
+            let mut rng = rand::thread_rng();
+            let mut red: f32 = 0.0;
+            let mut green: f32 = 0.0;
+            let mut blue: f32 = 0.0;
+            //let samples: [Vector3<f32>; ANTI_ALIASING_SAMPLE as usize] = 
+            //    [Vector3::new(0.0, 0.0, 0.0); ANTI_ALIASING_SAMPLE as usize];
+            for sample in 0..ANTI_ALIASING_SAMPLE {
+                let u: f32 = (x as f32 + rng.gen::<f32>()) / IMG_WIDTH as f32;
+                let v: f32 = ((IMG_HEIGHT - y) as f32 + rng.gen::<f32>()) / IMG_HEIGHT as f32;
+                let r = Ray::new(
+                    origin,
+                    unit_vector(&(lower_left + ((u * horizontal) + (v * vertical))))
+                );
+                let sample = trace(&r, x, IMG_HEIGHT - y, u, v); 
+                red += sample.x;
+                green += sample.y;
+                blue += sample.z;
+            }
 
-            let r = Ray::new(
-                origin,
-                unit_vector(&(lower_left + ((u * horizontal) + (v * vertical))))
-            );
-
-            /*for sample in 0..ANTI_ALIASING_SAMPLE {
-                let u: f32 = x as f32 / IMG_WIDTH as f32;
-                let v: f32 = ((IMG_HEIGHT - y) as f32) / IMG_HEIGHT as f32;
-
-            }*/
-
-            let color = trace(&r, x, IMG_HEIGHT - y, u, v);
-            data[index] = (color.x * 255.99) as u8;
-            data[index+1] = (color.y * 255.99) as u8;
-            data[index+2] = (color.z * 255.99) as u8;
+            red /= ANTI_ALIASING_SAMPLE as f32;
+            blue /= ANTI_ALIASING_SAMPLE as f32;
+            green /= ANTI_ALIASING_SAMPLE as f32;
+    
+            //let color = trace(&r, x, IMG_HEIGHT - y, u, v);
+            data[index] = (red * 255.99) as u8;
+            data[index+1] = (green * 255.99) as u8;
+            data[index+2] = (blue * 255.99) as u8;
         }
     }
 
