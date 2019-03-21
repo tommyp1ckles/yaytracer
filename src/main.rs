@@ -97,7 +97,15 @@ fn trace(r: &Ray, x: usize, y: usize, u: f32, v: f32) -> Vector3<f32> {
         0.5,
         r
     );
-    if is_hit {
+
+    let sphere0 = Sphere::new(
+        Vector3::new(0.0, 0.0, -1.0),
+        0.5
+    );
+
+    let hit = sphere0.hit(r, -1000.0, 1000.0);
+
+    if hit.is_hit {
         let n = unit_vector(
             //&(r.point(surface_norm_t) - Vector3::new(0.0, 0.0, -1.0))
             &(r.point(surface_norm_t) - sphere_center)
@@ -107,12 +115,12 @@ fn trace(r: &Ray, x: usize, y: usize, u: f32, v: f32) -> Vector3<f32> {
             println!("\n\nFor Ray ======> {:?} {:?}", r.A, r.B);
             println!("uv = {} {}", u, v);
             println!("XY => {} {}", x, y);
-            println!("xyz = ({}, {}, {})", n.x, n.y, n.z);
+            println!("xyz = ({}, {}, {})", hit.norm.x, hit.norm.y, hit.norm.z);
         }
         return 0.5 * Vector3::new(
-            n.x+1.0,
-            n.y+1.0,
-            n.z+1.0
+            hit.norm.x+1.0,
+            hit.norm.y+1.0,
+            hit.norm.z+1.0
         );
     }
     gradient_color(r)
@@ -141,7 +149,72 @@ fn hit_sphere(center: Vector3<f32>, radius: f32, ray: &Ray) -> (bool, f32) {
     )
 }
 
+struct Hit {
+    is_hit: bool,
+    t: f32,
+    point: Vector3<f32>,
+    norm: Vector3<f32>
+}
 
+trait Visible {
+    fn hit(&self, ray: &Ray, t_min: f32, t_max: f32) -> Hit;
+}
+
+struct Sphere {
+    center: Vector3<f32>,
+    radius: f32,
+}
+
+impl Sphere {
+    fn new(center: Vector3<f32>, radius: f32) -> Sphere {
+        Sphere{
+            center: center,
+            radius: radius
+        }
+    }
+}
+
+impl Visible for Sphere {
+    fn hit(&self, ray: &Ray, t_min: f32, t_max: f32) -> Hit {
+        let oc = ray.origin() - self.center;
+        let a = ray.direction().dot(*ray.direction());
+        let b = 2.0*oc.dot(*ray.direction());
+        let c = oc.dot(oc) - self.radius*self.radius;
+        let d = b*b - 4.0*a*c;
+
+        if d > 0.0 {
+            let root_a = (-1.0 * b - d.sqrt())/(2.0*a);
+            let root_b = (-1.0 * b + d.sqrt())/(2.0*a);
+            // todo: write a macro for this.
+            if root_a <= t_max && root_a >= t_min {
+                let p = ray.point(root_a);
+                return Hit{
+                    is_hit: true,
+                    t: root_a,
+                    point: p,
+                    norm: (p - self.center) / self.radius
+                };
+            }
+
+            if root_b <= t_max && root_b >= t_min {
+                let p = ray.point(root_b);
+                return Hit{
+                    is_hit: true,
+                    t: root_b,
+                    point: p,
+                    norm: (p - self.center) / self.radius
+                };
+            }
+        }
+
+        Hit{
+            is_hit: false,
+            t: 0.0,
+            point: Vector3::new(0.0, 0.0, 0.0),
+            norm: Vector3::new(0.0, 0.0, 0.0)
+        }
+    }
+}
 
 fn main() {
     println!("Time for some raytracing!");
