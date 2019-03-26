@@ -49,7 +49,6 @@ mod material_utils {
             ) - Vector3::new(1.0, 1.0, 1.0);
 
             let sl = p.x*p.x + p.y*p.y + p.z*p.z;
-            //println!("p = {:?}", p);
             if sl < 1.0 {
                 break;
             }
@@ -91,6 +90,7 @@ const IMG_WIDTH: usize = 400;
 const IMG_HEIGHT: usize = 200;
 const T_MAX: f32 = 10000.0;
 const T_MIN: f32 = 0.001;
+const MAX_RECURSION_SIZE: i32 = 100;
 
 fn write_image(filename: &String, data: &[u8], width: u32, height: u32) -> io::Result<()> {
     let mut file = File::create(filename).unwrap();
@@ -158,45 +158,20 @@ fn unit_vector(v: &Vector3<f32>) -> Vector3<f32> {
 
 // this generates a gradient based on a traced ray.
 fn gradient_color(r: Ray) -> Vector3<f32> {
-    //let unit = r.direction().unit_x();
     let unit = unit_vector(r.direction());
     let t = 0.5 * (unit.y + 1.0);
     return (1.0-t) * Vector3::new(1.0, 1.0, 1.0) + t * Vector3::new(0.5, 0.7, 1.0);
 }
 
-fn trace(r: Ray, depth: i32) -> Vector3<f32> {
-    //print_next_stack_ptr!();
+struct World {
+    objects: Vec<Box<Visible>>,
+    materials: Vec<Box<Material>>
+}
 
-    if depth >= 100 {
+fn trace(r: Ray, world: &World, depth: i32) -> Vector3<f32> {
+    if depth >= MAX_RECURSION_SIZE {
         return gradient_color(r);
     }
-
-    let mut materials: Vec<Box<Material>> = Vec::new();
-    materials.push(Box::new(
-        Lambertian::new(),
-        //Metal::new(),
-
-    ));
-    materials.push(Box::new(
-        Metal::new(),
-    ));
-
-    let mut objects: Vec<Box<Visible>> = Vec::new();
-    objects.push(Box::new(
-        Sphere::new(
-            Vector3::new(0.0, 0.0, -1.0),
-            0.5,
-            1
-        )
-    ));
-    
-    objects.push(Box::new(
-        Sphere::new(
-            Vector3::new(0.0, -100.5, -1.0),
-            100.0,
-            0
-        )
-    ));
 
     let mut hit = Hit{
         is_hit: false,
@@ -207,7 +182,7 @@ fn trace(r: Ray, depth: i32) -> Vector3<f32> {
     };
     let mut closest = T_MAX; 
     let mut hit_exists = false;
-    for object in objects.iter() {
+    for object in world.objects.iter() {
         let tmp_hit = object.hit(r, T_MIN, closest);
         if tmp_hit.is_hit {
             closest = tmp_hit.t;
@@ -217,8 +192,8 @@ fn trace(r: Ray, depth: i32) -> Vector3<f32> {
     }
 
     if hit_exists {
-        let (new_ray, was_reflected) = materials[hit.material].reflect(r, hit);
-        return 0.5 * trace(new_ray, depth+1);
+        let (new_ray, was_reflected) = world.materials[hit.material].reflect(r, hit);
+        return 0.5 * trace(new_ray, world, depth+1);
     }
     gradient_color(r)
 }
@@ -337,13 +312,6 @@ impl Visible for Sphere {
     }
 }
 
-fn print_stack_size() {
-    let dummy: i32 = 0x0;
-    unsafe {
-        println!("print_stack_size: {:p}", &dummy);
-    }
-}
-
 fn gamma(color: Vector3<f32>, n: f32) -> Vector3<f32> {
     let i: f32 = 1.0 / n;
     Vector3::new(
@@ -356,22 +324,49 @@ fn gamma(color: Vector3<f32>, n: f32) -> Vector3<f32> {
 fn main() {
     println!("Time for some raytracing!");
 
+    // Initialize world.
+    let mut materials: Vec<Box<Material>> = Vec::new();
+    materials.push(Box::new(
+        Lambertian::new(),
+    ));
+    materials.push(Box::new(
+        Metal::new(),
+    ));
+
+    let mut objects: Vec<Box<Visible>> = Vec::new();
+    objects.push(Box::new(
+        Sphere::new(
+            Vector3::new(0.0, 0.0, -1.0),
+            0.5,
+            1
+        )
+    ));
+    
+    objects.push(Box::new(
+        Sphere::new(
+            Vector3::new(0.0, -100.5, -1.0),
+            100.0,
+            0
+        )
+    ));
+
+    let world = World{
+        materials: materials,
+        objects: objects
+    };
+
     // Note: Have to allocate data to heap in order to not overflow the stack during runtime.
-    // TODO: Investigate if it it's faster to allocate data to heap but then iterate over a 
-    // fixed size buffer which gets written to data.
-    //let mut data: [u8; 3 * IMG_HEIGHT * IMG_WIDTH] = [0; 3 * IMG_HEIGHT * IMG_WIDTH];
     let mut data = vec![0; 3 * IMG_HEIGHT * IMG_WIDTH];
 
     let lower_left = Vector3::new(-2.0, -1.0, -1.0);
     let horizontal = Vector3::new(4.0, 0.0, 0.0);
     let vertical = Vector3::new(0.0, 2.0, 0.0);
     let origin = Vector3::new(0.0, 0.0, 0.0);
-    //for y in (IMG_HEIGHT-1..IMG_HEIGHT) {
-    //    for x in (IMG_WIDTH-1..IMG_WIDTH) {
+
     let bar = ProgressBar::new((IMG_HEIGHT * IMG_WIDTH) as u64);
     bar.set_style(ProgressStyle::default_bar()
         .template("{spinner:.green} [{elapsed_precise}] [{bar:100.cyan/blue}] {pos:>7}/{len:7} Rays ({eta})")
-        .progress_chars("#>-"));
+        .progress_chars("#-"));
 
     for y in (0..IMG_HEIGHT) {
         for x in (0..IMG_WIDTH) {
@@ -394,7 +389,9 @@ fn main() {
                     unit_vector(&(lower_left + ((u * horizontal) + (v * vertical))))
                 );
 
-                let sample = trace(r, 0);
+                // should be fine for concurrency since we're not passing
+                // mutable references.
+                let sample = trace(r, &world, 0);
 
                 color += sample;
             }
@@ -411,7 +408,7 @@ fn main() {
     //process::exit(0x0100);
 
     let r = write_image(
-        &String::from("ch7.png"),
+        &String::from("output.png"),
         &data,
         IMG_WIDTH as u32,
         IMG_HEIGHT as u32   
