@@ -85,8 +85,12 @@ mod material_utils {
 
 use material_utils::LambertTable;
 
+const ANTI_ALIASING_SAMPLE: i32 = 64;
+
 const IMG_WIDTH: usize = 400;
 const IMG_HEIGHT: usize = 200;
+const T_MAX: f32 = 10000.0;
+const T_MIN: f32 = 0.001;
 
 fn write_image(filename: &String, data: &[u8], width: u32, height: u32) -> io::Result<()> {
     let mut file = File::create(filename).unwrap();
@@ -160,18 +164,6 @@ fn gradient_color(r: Ray) -> Vector3<f32> {
     return (1.0-t) * Vector3::new(1.0, 1.0, 1.0) + t * Vector3::new(0.5, 0.7, 1.0);
 }
 
-// allocates a new variable to the stack and prints its address.
-macro_rules! print_next_stack_ptr {
-    () => (
-        let dummy: i32 = 0x0;
-        println!("next_stack_ptr: {:p}", &dummy);
-    )
-}
-
-
-const T_MAX: f32 = 10000.0;
-const T_MIN: f32 = 0.001;
-
 fn trace(r: Ray, depth: i32) -> Vector3<f32> {
     //print_next_stack_ptr!();
 
@@ -181,8 +173,8 @@ fn trace(r: Ray, depth: i32) -> Vector3<f32> {
 
     let mut materials: Vec<Box<Material>> = Vec::new();
     materials.push(Box::new(
-        //Lambertian::new(),
-        Metal::new(),
+        Lambertian::new(),
+        //Metal::new(),
 
     ));
     materials.push(Box::new(
@@ -344,8 +336,6 @@ impl Visible for Sphere {
         }
     }
 }
-
-const ANTI_ALIASING_SAMPLE: i32 = 64;
 
 fn print_stack_size() {
     let dummy: i32 = 0x0;
