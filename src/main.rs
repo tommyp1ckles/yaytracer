@@ -1,10 +1,15 @@
 extern crate image;
 extern crate rand;
 
+use indicatif::{ProgressBar, ProgressStyle};
+
 use rand::{
     Rng,
     XorShiftRng
 };
+use std::cmp::min;
+use std::thread;
+use std::time::Duration;
 
 use image::{Rgb};
 use image::RGB;
@@ -80,8 +85,8 @@ mod material_utils {
 
 use material_utils::LambertTable;
 
-const IMG_WIDTH: usize = 600;
-const IMG_HEIGHT: usize = 300;
+const IMG_WIDTH: usize = 400;
+const IMG_HEIGHT: usize = 200;
 
 fn write_image(filename: &String, data: &[u8], width: u32, height: u32) -> io::Result<()> {
     let mut file = File::create(filename).unwrap();
@@ -174,18 +179,30 @@ fn trace(r: Ray, depth: i32) -> Vector3<f32> {
         return gradient_color(r);
     }
 
+    let mut materials: Vec<Box<Material>> = Vec::new();
+    materials.push(Box::new(
+        //Lambertian::new(),
+        Metal::new(),
+
+    ));
+    materials.push(Box::new(
+        Metal::new(),
+    ));
+
     let mut objects: Vec<Box<Visible>> = Vec::new();
     objects.push(Box::new(
         Sphere::new(
             Vector3::new(0.0, 0.0, -1.0),
-            0.5
+            0.5,
+            1
         )
     ));
     
     objects.push(Box::new(
         Sphere::new(
             Vector3::new(0.0, -100.5, -1.0),
-            100.0
+            100.0,
+            0
         )
     ));
 
@@ -193,7 +210,8 @@ fn trace(r: Ray, depth: i32) -> Vector3<f32> {
         is_hit: false,
         t: 0.0,
         point: Vector3::new(0.0, 0.0, 0.0),
-        norm: Vector3::new(0.0, 0.0, 0.0)
+        norm: Vector3::new(0.0, 0.0, 0.0),
+        material: 0
     };
     let mut closest = T_MAX; 
     let mut hit_exists = false;
@@ -207,15 +225,7 @@ fn trace(r: Ray, depth: i32) -> Vector3<f32> {
     }
 
     if hit_exists {
-        let target = (hit.point + hit.norm) + material_utils::lambert_unit_vector();
-        //let target = (hit.point + hit.norm) + lambert;
-        // redirect the ray, we reuse for easy tracing.
-        //r.A = hit.point;
-        //r.B = target - hit.point;
-        let new_ray = Ray::new(
-            hit.point,
-            target - hit.point
-        );
+        let (new_ray, was_reflected) = materials[hit.material].reflect(r, hit);
         return 0.5 * trace(new_ray, depth+1);
     }
     gradient_color(r)
@@ -226,12 +236,50 @@ struct Hit {
     t: f32,
     point: Vector3<f32>,
     norm: Vector3<f32>,
-    //material: Material
+    material: usize
 }
 
-//trait Material {
-//    fn reflect(ray: Ray, point: Vector3<f32>)
-//}
+trait Material {
+    fn reflect(&self, ray: Ray, hit: Hit) -> (Ray, bool);
+}
+
+struct Lambertian {}
+
+impl Lambertian {
+    fn new() -> Lambertian { Lambertian{} }
+}
+
+impl Material for Lambertian {
+    fn reflect(&self, ray: Ray, hit: Hit) -> (Ray, bool) {
+        let target = (hit.point + hit.norm) + material_utils::lambert_unit_vector();
+        (
+            Ray::new(hit.point, target - hit.point),
+            true
+        )
+    }
+}
+
+struct Metal {}
+
+impl Metal {
+    fn new() -> Metal {
+        Metal{}
+    }
+}
+
+impl Material for Metal {
+    fn reflect(&self, ray: Ray, hit: Hit) -> (Ray, bool) {
+        let r = ray.direction() - 2.0 * (ray.direction().dot(hit.norm)) * hit.norm;
+        let sr = Ray{
+            A: hit.point,
+            B: r,
+        };
+        (
+            sr,
+            true
+        )
+    }
+}
 
 trait Visible {
     fn hit(&self, ray: Ray, t_min: f32, t_max: f32) -> Hit;
@@ -240,13 +288,15 @@ trait Visible {
 struct Sphere {
     center: Vector3<f32>,
     radius: f32,
+    material: usize
 }
 
 impl Sphere {
-    fn new(center: Vector3<f32>, radius: f32) -> Sphere {
+    fn new(center: Vector3<f32>, radius: f32, material: usize) -> Sphere {
         Sphere{
             center: center,
-            radius: radius
+            radius: radius,
+            material: material
         }
     }
 }
@@ -262,14 +312,14 @@ impl Visible for Sphere {
             let root_a = (-1.0 * b - d.sqrt())/(2.0*a);
             let root_b = (-1.0 * b + d.sqrt())/(2.0*a);
 
-            // todo: write a macro for this.
             if root_a < t_max && root_a > t_min {
                 let p = ray.point(root_a);
                 return Hit{
                     is_hit: true,
                     t: root_a,
                     point: p,
-                    norm: (p - self.center) / self.radius
+                    norm: (p - self.center) / self.radius,
+                    material: self.material
                 };
             }
 
@@ -279,7 +329,8 @@ impl Visible for Sphere {
                     is_hit: true,
                     t: root_b,
                     point: p,
-                    norm: (p - self.center) / self.radius
+                    norm: (p - self.center) / self.radius,
+                    material: self.material
                 };
             }
         }
@@ -288,12 +339,13 @@ impl Visible for Sphere {
             is_hit: false,
             t: 0.0,
             point: Vector3::new(0.0, 0.0, 0.0),
-            norm: Vector3::new(0.0, 0.0, 0.0)
+            norm: Vector3::new(0.0, 0.0, 0.0),
+            material: self.material
         }
     }
 }
 
-const ANTI_ALIASING_SAMPLE: i32 = 256;
+const ANTI_ALIASING_SAMPLE: i32 = 64;
 
 fn print_stack_size() {
     let dummy: i32 = 0x0;
@@ -314,10 +366,6 @@ fn gamma(color: Vector3<f32>, n: f32) -> Vector3<f32> {
 fn main() {
     println!("Time for some raytracing!");
 
-    println!("Precomputing lambert values");
-    let lambert = LambertTable::new(1024);
-    println!("Tracing rays!");
-
     // Note: Have to allocate data to heap in order to not overflow the stack during runtime.
     // TODO: Investigate if it it's faster to allocate data to heap but then iterate over a 
     // fixed size buffer which gets written to data.
@@ -330,16 +378,20 @@ fn main() {
     let origin = Vector3::new(0.0, 0.0, 0.0);
     //for y in (IMG_HEIGHT-1..IMG_HEIGHT) {
     //    for x in (IMG_WIDTH-1..IMG_WIDTH) {
+    let bar = ProgressBar::new((IMG_HEIGHT * IMG_WIDTH) as u64);
+    bar.set_style(ProgressStyle::default_bar()
+        .template("{spinner:.green} [{elapsed_precise}] [{bar:100.cyan/blue}] {pos:>7}/{len:7} Rays ({eta})")
+        .progress_chars("#>-"));
+
     for y in (0..IMG_HEIGHT) {
         for x in (0..IMG_WIDTH) {
+            bar.inc(1);
+
             let index = (y * IMG_WIDTH + x) * 3;
             let u: f32 = x as f32 / IMG_WIDTH as f32;
             let v: f32 = ((IMG_HEIGHT - y) as f32) / IMG_HEIGHT as f32;
             
             let mut rng = rand::thread_rng();
-            //let mut red: f32 = 0.0;
-            //let mut green: f32 = 0.0;
-            //let mut blue: f32 = 0.0;
             let mut color = Vector3::new(0.0, 0.0, 0.0);
             // TODO: Better to just divide the pixel, random leads to strange re
             for sample in 0..ANTI_ALIASING_SAMPLE {
@@ -352,31 +404,20 @@ fn main() {
                     unit_vector(&(lower_left + ((u * horizontal) + (v * vertical))))
                 );
 
-                // TODO: Having the ray be mutable and borrowed is a dumb idea.
                 let sample = trace(r, 0);
-                //red += sample.x;
-                //green += sample.y;
-                //blue += sample.z;
 
                 color += sample;
             }
 
-            //println!("XY =>")
-            //println!("RGB => {}, {}, {}", red, green, blue);
-
             color /= ANTI_ALIASING_SAMPLE as f32;
             color = gamma(color, 2.0);
-            //red /= ANTI_ALIASING_SAMPLE as f32;
-            //blue /= ANTI_ALIASING_SAMPLE as f32;
-            //green /= ANTI_ALIASING_SAMPLE as f32;
             
             data[index] = (color.x * 255.99) as u8;
             data[index+1] = (color.y * 255.99) as u8;
             data[index+2] = (color.z * 255.99) as u8;
         }
     }
-
-    println!("This was just a debug run");
+    bar.finish();
     //process::exit(0x0100);
 
     let r = write_image(
