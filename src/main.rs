@@ -1,6 +1,10 @@
 extern crate image;
 extern crate rand;
 
+mod geometry;
+use geometry::hit::Hit;
+use geometry::ray::Ray;
+
 use indicatif::{ProgressBar, ProgressStyle};
 
 use rand::{
@@ -24,7 +28,6 @@ use cgmath::{
     Vector3,
     InnerSpace
 };
-
 
 mod material_utils {
     extern crate rand;
@@ -103,42 +106,9 @@ fn write_image(filename: &String, data: &[u8], width: u32, height: u32) -> io::R
     )
 }
 
-#[derive(Copy, Clone)]
-struct Ray {
-    A: Vector3<f32>,
-    B: Vector3<f32>,
-}
-
-impl Ray {
-    fn new(A: Vector3<f32>, B: Vector3<f32>) -> Ray {
-        Ray{
-            A: A,
-            B: B,
-        }
-    }
-
-    fn origin(&self) -> &Vector3<f32> { &self.A }
-    fn direction(&self) -> &Vector3<f32> { &self.B }
-    fn point(&self, t: f32) -> Vector3<f32> {
-        self.A + (t * self.B)
-    }
-}
-
 #[cfg(test)]
 mod tests{
     use super::*;
-
-    #[test]
-    fn test_ray_point() {
-        let a = Vector3::new(0.0, 0.0, 0.0);
-        let b = Vector3::new(1.0, 1.0, 1.0);
-        let r = Ray::new(a, b);
-        let p = r.point(1.0);
-        assert_eq!(p.x, 1.0);
-        assert_eq!(p.y, 1.0);
-        assert_eq!(p.z, 1.0);
-        Vector3::new(1.0, 2.0, 3.0).dot(Vector3::new(3.0, 4.0, 1.0));
-    }
 
     #[test]
     fn test_unit_vector() {
@@ -198,14 +168,6 @@ fn trace(r: Ray, world: &World, depth: i32) -> Vector3<f32> {
     gradient_color(r)
 }
 
-struct Hit {
-    is_hit: bool,
-    t: f32,
-    point: Vector3<f32>,
-    norm: Vector3<f32>,
-    material: usize
-}
-
 trait Material {
     fn reflect(&self, ray: Ray, hit: Hit) -> (Ray, bool);
 }
@@ -237,12 +199,8 @@ impl Metal {
 impl Material for Metal {
     fn reflect(&self, ray: Ray, hit: Hit) -> (Ray, bool) {
         let r = ray.direction() - 2.0 * (ray.direction().dot(hit.norm)) * hit.norm;
-        let sr = Ray{
-            A: hit.point,
-            B: r,
-        };
         (
-            sr,
+            Ray::new(hit.point, r),
             true
         )
     }
