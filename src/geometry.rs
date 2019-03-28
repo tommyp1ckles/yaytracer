@@ -114,3 +114,95 @@ impl Visible for Sphere {
         }
     }
 }
+
+pub struct Triangle {
+    v0: Vector3<f32>,
+    v1: Vector3<f32>,
+    v2: Vector3<f32>,
+    material: usize
+}
+
+const EPSILON: f32 = 0.000001;
+
+impl Triangle {
+    pub fn new(v0: Vector3<f32>, v1: Vector3<f32>, v2: Vector3<f32>, material: usize) -> Triangle {
+        Triangle{
+            v0: v0,
+            v1: v1,
+            v2: v2,
+            material: material
+        }
+    }
+}
+
+impl Visible for Triangle {
+    // Inputs:
+    // O
+    // D
+    // V0
+    // V1
+    // V2
+    // Outputs:
+    // t, u, v
+    fn hit(&self, ray: Ray, t_min: f32, t_max: f32) -> Hit {
+        let edge1 = self.v1 - self.v0;
+        let edge2 = self.v2 - self.v0;
+        let pvec = ray.direction().cross(edge2);
+        let det = edge1.dot(pvec);
+        if det < EPSILON {
+            return Hit{
+                is_hit: false,
+                t: 0.0,
+                point: Vector3::new(0.0, 0.0, 0.0),
+                norm: Vector3::new(0.0, 0.0, 0.0),
+                material: self.material              
+            };
+        }
+
+        let tvec = ray.origin() - self.v0;
+        let mut u = tvec.dot(pvec);
+
+        if u < 0.0 || u > det {
+            return Hit{
+                is_hit: false,
+                t: 0.0,
+                point: Vector3::new(0.0, 0.0, 0.0),
+                norm: Vector3::new(0.0, 0.0, 0.0),
+                material: self.material              
+            }
+        }
+
+        let qvec = tvec.cross(edge1);
+
+        let mut v = ray.direction().dot(qvec);
+
+        if v < 0.0 || (u+v) > det {
+            return Hit{
+                is_hit: false,
+                t: 0.0,
+                point: Vector3::new(0.0, 0.0, 0.0),
+                norm: Vector3::new(0.0, 0.0, 0.0),
+                material: self.material              
+            }           
+        }
+
+        let mut t = edge2.dot(qvec);
+        let inv_det = 1.0 / det;
+
+        t *= inv_det;
+        u *= inv_det;
+        v *= inv_det;
+
+        // T(u, v) = (1 - u - v)*V0 + u*V1 + uV2
+
+        Hit{
+            is_hit: false,
+            t: t,
+            // TODO: !!!!!!!!!!!!!!!
+            // TODO: !!!!!!!!!!!!!!!
+            point: ray.origin() + t*ray.direction(),
+            norm: Vector3::new(0.0, 0.0, 0.0),
+            material: self.material                  
+        }
+    }
+}

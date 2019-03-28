@@ -6,6 +6,7 @@ use geometry::Hit;
 use geometry::{
     Ray,
     Sphere,
+    Triangle,
     Visible
 };
 
@@ -43,7 +44,7 @@ use cgmath::{
 
 //use material_utils::LambertTable;
 
-const ANTI_ALIASING_SAMPLE: i32 = 64;
+const ANTI_ALIASING_SAMPLE: i32 = 128;
 
 const IMG_WIDTH: usize = 400;
 const IMG_HEIGHT: usize = 200;
@@ -144,16 +145,35 @@ fn main() {
     materials.push(Box::new(
         Metal::new(),
     ));
+    materials.push(Box::new(
+        Lambertian::new(),
+    ));
 
     let mut objects: Vec<Box<Visible>> = Vec::new();
     objects.push(Box::new(
         Sphere::new(
             Vector3::new(0.0, 0.0, -1.0),
             0.5,
+            0
+        )
+    ));
+
+    objects.push(Box::new(
+        Sphere::new(
+            Vector3::new(-1.0, 0.0, -1.0),
+            0.5,
             1
         )
     ));
-    
+
+    objects.push(Box::new(
+        Sphere::new(
+            Vector3::new(1.0, 0.0, -1.0),
+            0.5,
+            1
+        )
+    ));
+
     objects.push(Box::new(
         Sphere::new(
             Vector3::new(0.0, -100.5, -1.0),
@@ -161,6 +181,16 @@ fn main() {
             0
         )
     ));
+
+
+    /*objects.push(Box::new(
+        Triangle::new(
+            Vector3::new(0.0, 0.0, -1.0),
+            Vector3::new(-1.0, 0.0, -1.0),
+            Vector3::new(0.0, -1.0, -1.0),
+            2
+        )
+    ));*/
 
     let world = World{
         materials: materials,
