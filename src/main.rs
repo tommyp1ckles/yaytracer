@@ -1,5 +1,6 @@
 extern crate image;
 extern crate rand;
+extern crate threadpool;
 
 mod geometry;
 use geometry::Hit;
@@ -9,6 +10,10 @@ use geometry::{
     Triangle,
     Visible
 };
+
+use threadpool::ThreadPool;
+use std::sync::mpsc::{Sender, Receiver};
+use std::sync::mpsc;
 
 mod materials;
 
@@ -90,11 +95,6 @@ fn gradient_color(r: Ray) -> Vector3<f32> {
     return (1.0-t) * Vector3::new(1.0, 1.0, 1.0) + t * Vector3::new(0.5, 0.7, 1.0);
 }
 
-struct World {
-    objects: Vec<Box<Visible>>,
-    materials: Vec<Box<Material>>
-}
-
 fn trace(r: Ray, world: &World, depth: i32) -> Vector3<f32> {
     if depth >= MAX_RECURSION_SIZE {
         return gradient_color(r);
@@ -134,11 +134,19 @@ fn gamma(color: Vector3<f32>, n: f32) -> Vector3<f32> {
     )
 }
 
+use std::sync::Arc;
+
+
+struct World {
+    objects: Arc<Vec<Box<Visible>>>,
+    materials: Arc<Vec<Box<Material>>>
+}
+
 fn main() {
     println!("Time for some raytracing!");
 
     // Initialize world.
-    let mut materials: Vec<Box<Material>> = Vec::new();
+    let mut materials: Arc<Vec<Box<Material>>> = Arc::new(Vec::new());
     materials.push(Box::new(
         Lambertian::new(),
     ));
@@ -149,7 +157,7 @@ fn main() {
         Lambertian::new(),
     ));
 
-    let mut objects: Vec<Box<Visible>> = Vec::new();
+    let mut objects: Arc<Vec<Box<Visible>>> = Arc::new(Vec::new());
     objects.push(Box::new(
         Sphere::new(
             Vector3::new(0.0, 0.0, -1.0),
@@ -182,7 +190,6 @@ fn main() {
         )
     ));
 
-
     /*objects.push(Box::new(
         Triangle::new(
             Vector3::new(0.0, 0.0, -1.0),
@@ -192,10 +199,10 @@ fn main() {
         )
     ));*/
 
-    let world = World{
+    /*let world: World = World{
         materials: materials,
         objects: objects
-    };
+    };*/
 
     // Note: Have to allocate data to heap in order to not overflow the stack during runtime.
     let mut data = vec![0; 3 * IMG_HEIGHT * IMG_WIDTH];
@@ -210,43 +217,50 @@ fn main() {
         .template("{spinner:.green} [{elapsed_precise}] [{bar:100.cyan/blue}] {pos:>7}/{len:7} Rays ({eta})")
         .progress_chars("#-"));
 
+    let n_workers = 8;
+    let pool = ThreadPool::new(n_workers);
+    let (tx, rx): (Sender<Vector3<f32>>, Receiver<Vector3<f32>>) = mpsc::channel();
     for y in (0..IMG_HEIGHT) {
         for x in (0..IMG_WIDTH) {
-            bar.inc(1);
-
+            //bar.inc(1);
             let index = (y * IMG_WIDTH + x) * 3;
             let u: f32 = x as f32 / IMG_WIDTH as f32;
             let v: f32 = ((IMG_HEIGHT - y) as f32) / IMG_HEIGHT as f32;
-            
-            let mut rng = rand::thread_rng();
-            let mut color = Vector3::new(0.0, 0.0, 0.0);
-            // TODO: Better to just divide the pixel, random leads to strange re
-            for sample in 0..ANTI_ALIASING_SAMPLE {
+            let sync_world = World{
+                materials: materials.clone(),
+                objects: objects.clone()
+            };
+            pool.execute(move|| {                
                 let mut rng = rand::thread_rng();
-                let u: f32 = (x as f32 + rng.gen::<f32>()) / IMG_WIDTH as f32;
-                let v: f32 = ((IMG_HEIGHT - y) as f32 + rng.gen::<f32>()) / IMG_HEIGHT as f32;
+                let mut color = Vector3::new(0.0, 0.0, 0.0);
+                // TODO: Better to just divide the pixel, random leads to strange re
+                for sample in 0..ANTI_ALIASING_SAMPLE {
+                    let mut rng = rand::thread_rng();
+                    let u: f32 = (x as f32 + rng.gen::<f32>()) / IMG_WIDTH as f32;
+                    let v: f32 = ((IMG_HEIGHT - y) as f32 + rng.gen::<f32>()) / IMG_HEIGHT as f32;
 
-                let mut r = Ray::new(
-                    origin,
-                    unit_vector(&(lower_left + ((u * horizontal) + (v * vertical))))
-                );
+                    let mut r = Ray::new(
+                        origin,
+                        unit_vector(&(lower_left + ((u * horizontal) + (v * vertical))))
+                    );
 
-                // should be fine for concurrency since we're not passing
-                // mutable references.
-                let sample = trace(r, &world, 0);
+                    // should be fine for concurrency since we're not passing
+                    // mutable references.
+                    let sample = trace(r, &sync_world, 0);
 
-                color += sample;
-            }
+                    color += sample;
+                }
 
-            color /= ANTI_ALIASING_SAMPLE as f32;
-            color = gamma(color, 2.0);
-            
-            data[index] = (color.x * 255.99) as u8;
-            data[index+1] = (color.y * 255.99) as u8;
-            data[index+2] = (color.z * 255.99) as u8;
+                color /= ANTI_ALIASING_SAMPLE as f32;
+                color = gamma(color, 2.0);
+                
+                data[index] = (color.x * 255.99) as u8;
+                data[index+1] = (color.y * 255.99) as u8;
+                data[index+2] = (color.z * 255.99) as u8;
+            })
         }
     }
-    bar.finish();
+    //bar.finish();
     //process::exit(0x0100);
 
     let r = write_image(
