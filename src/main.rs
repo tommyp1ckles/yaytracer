@@ -52,8 +52,8 @@ use std::time::Instant;
 
 const ANTI_ALIASING_SAMPLE: i32 = 128;
 
-const IMG_WIDTH: usize = 1920;
-const IMG_HEIGHT: usize = 1080;
+const IMG_WIDTH: usize = 600;
+const IMG_HEIGHT: usize = 400;
 const T_MAX: f32 = 10000.0;
 const T_MIN: f32 = 0.001;
 const MAX_RECURSION_SIZE: i32 = 100;
