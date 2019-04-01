@@ -7,7 +7,7 @@ use geometry::Hit;
 use geometry::{
     Ray,
     Sphere,
-    Triangle,
+    //Triangle,
     Visible
 };
 
@@ -25,40 +25,32 @@ use materials::{
 
 use indicatif::{ProgressBar, ProgressStyle};
 
-use rand::{
-    Rng,
-    XorShiftRng
-};
-use std::cmp::min;
-use std::thread;
-use std::time::Duration;
+use rand::{Rng};
 
-use image::{Rgb};
+//use image::{Rgb};
 use image::RGB;
 
 use image::png::PNGEncoder;
 use std::fs::File;
 
 use std::io;
-use std::process;
 
 use cgmath::{
     Vector3,
-    InnerSpace
 };
 
-//use material_utils::LambertTable;
+use std::sync::{Arc};
 
 const ANTI_ALIASING_SAMPLE: i32 = 128;
 
-const IMG_WIDTH: usize = 1920;
-const IMG_HEIGHT: usize = 1080;
+const IMG_WIDTH: usize = 400;
+const IMG_HEIGHT: usize = 200;
 const T_MAX: f32 = 10000.0;
 const T_MIN: f32 = 0.001;
 const MAX_RECURSION_SIZE: i32 = 100;
 
 fn write_image(filename: &String, data: &[u8], width: u32, height: u32) -> io::Result<()> {
-    let mut file = File::create(filename).unwrap();
+    let file = File::create(filename).unwrap();
     let enc = PNGEncoder::new(file);
     enc.encode(
         &data,
@@ -119,7 +111,7 @@ fn trace(r: Ray, world: &World, depth: i32) -> Vector3<f32> {
     }
 
     if hit_exists {
-        let (new_ray, was_reflected) = world.materials[hit.material].reflect(r, hit);
+        let (new_ray, _was_reflected) = world.materials[hit.material].reflect(r, hit);
         return 0.5 * trace(new_ray, world, depth+1);
     }
     gradient_color(r)
@@ -134,14 +126,10 @@ fn gamma(color: Vector3<f32>, n: f32) -> Vector3<f32> {
     )
 }
 
-use std::sync::{Mutex, Arc};
-
 struct World {
     objects: Arc<Vec<Box<Visible>>>,
     materials: Arc<Vec<Box<Material>>>
 }
-
-use std::sync::RwLock;
 
 #[derive(Debug, Copy, Clone)]
 struct PixelMessage {
@@ -199,6 +187,8 @@ fn main() {
 
     let objects = Arc::new(objects);
     let materials = Arc::new(materials);
+
+    // TODO: Implement Vector Correctly.
     /*objects.push(Box::new(
         Triangle::new(
             Vector3::new(0.0, 0.0, -1.0),
@@ -207,11 +197,6 @@ fn main() {
             2
         )
     ));*/
-
-    /*let world: World = World{
-        materials: materials,
-        objects: objects
-    };*/
 
     // Note: Have to allocate data to heap in order to not overflow the stack during runtime.
     let mut data = vec![0; 3 * IMG_HEIGHT * IMG_WIDTH];
@@ -223,41 +208,29 @@ fn main() {
 
     let bar = ProgressBar::new((IMG_HEIGHT * IMG_WIDTH) as u64);
     bar.set_style(ProgressStyle::default_bar()
-        .template("{spinner:.green} [{elapsed_precise}] [{bar:100.cyan/blue}] {pos:>7}/{len:7} Rays ({eta})")
+        .template("{spinner:.green} [{elapsed_precise}] [{bar:60.cyan/blue}] {pos:>7}/{len:7} Rays ({eta})")
         .progress_chars("#-"));
 
     let n_workers = 8;
     let pool = ThreadPool::new(n_workers);
     let (tx, rx): (Sender<PixelMessage>, Receiver<PixelMessage>) = mpsc::channel();
-    for y in (0..IMG_HEIGHT) {
-        for x in (0..IMG_WIDTH) {
-            //bar.inc(1);
+    for y in 0..IMG_HEIGHT {
+        for x in 0..IMG_WIDTH {
             let index = (y * IMG_WIDTH + x) * 3;
-            let u: f32 = x as f32 / IMG_WIDTH as f32;
-            let v: f32 = ((IMG_HEIGHT - y) as f32) / IMG_HEIGHT as f32;
-            //let world = World{
-            //    materials: materials.clone(),
-            //    objects: objects.clone()
-            //};
-            //let materials_clone = materials.clone();
-            //let materials_clone = materials.clone();
             let world = World{
                 materials: materials.clone(),
                 objects: objects.clone()
             };
             let tx = tx.clone();
             pool.execute(move|| {
-                println!("executing ray thread #{}", x + y * IMG_WIDTH);
-                //let materials_clone = Arc::try_unwrap(materials_clone);
-                let mut rng = rand::thread_rng();
                 let mut color = Vector3::new(0.0, 0.0, 0.0);
                 // TODO: Better to just divide the pixel, random leads to strange re
-                for sample in 0..ANTI_ALIASING_SAMPLE {
-                    let mut rng = rand::thread_rng();
+                let mut rng = rand::thread_rng();
+                for _ in 0..ANTI_ALIASING_SAMPLE {
                     let u: f32 = (x as f32 + rng.gen::<f32>()) / IMG_WIDTH as f32;
                     let v: f32 = ((IMG_HEIGHT - y) as f32 + rng.gen::<f32>()) / IMG_HEIGHT as f32;
 
-                    let mut r = Ray::new(
+                    let r = Ray::new(
                         origin,
                         unit_vector(&(lower_left + ((u * horizontal) + (v * vertical))))
                     );
@@ -280,28 +253,26 @@ fn main() {
         }
     }
 
-    for _ in 0..(IMG_HEIGHT*IMG_WIDTH) {
+    for i in 0..(IMG_HEIGHT*IMG_WIDTH) {
         let pm = rx.recv().unwrap();
         data[pm.index] = (pm.color.x * 255.99) as u8;
         data[pm.index+1] = (pm.color.y * 255.99) as u8;
         data[pm.index+2] = (pm.color.z * 255.99) as u8;
-        println!("Just did -> {}", pm.index);
+        if i%1000 == 0 {
+            bar.inc(1000);
+        }
     }
 
-    //bar.finish();
-    //process::exit(0x0100);
-
+    bar.finish();
     let r = write_image(
-        &String::from("output.png"),
+        &String::from("output2.png"),
         &data,
         IMG_WIDTH as u32,
         IMG_HEIGHT as u32   
     );
 
-    /*match r {
-        Ok(v) => println!("Ok, file written",),
+    match r {
+        Ok(_v) => println!("Ok, file written",),
         Err(e) => println!("Error writing file: {}", e)
-    }*/
-
-    //let v = Vector3::new(1.0, 2.0, 3.0);
+    }
 }

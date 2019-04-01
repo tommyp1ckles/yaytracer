@@ -1,4 +1,3 @@
-//mod geometry;
 use super::geometry::{
     Ray
 };
@@ -6,7 +5,6 @@ use super::geometry::{
 use super::geometry::Hit;
 
 use cgmath::{
-    Vector3,
     InnerSpace
 };
 
@@ -15,11 +13,9 @@ mod material_utils {
 
     use rand::{
         Rng,
-        XorShiftRng
     };
     use cgmath::{
         Vector3,
-        InnerSpace
     };
 
     pub fn lambert_unit_vector() -> Vector3<f32> {
@@ -40,7 +36,7 @@ mod material_utils {
         return p;
     }
 
-    pub struct LambertTable {
+    /*pub struct LambertTable {
         table: Vec<Vector3<f32>>,
         size: usize
     }
@@ -63,7 +59,7 @@ mod material_utils {
             let index = (rng.gen::<u32>() % self.size as u32) as usize;
             self.table[index]
         }
-    }
+    }*/
 }
 
 pub trait Material: Send + Sync {
@@ -77,7 +73,7 @@ impl Lambertian {
 }
 
 impl Material for Lambertian {
-    fn reflect(&self, ray: Ray, hit: Hit) -> (Ray, bool) {
+    fn reflect(&self, _ray: Ray, hit: Hit) -> (Ray, bool) {
         let target = (hit.point + hit.norm) + material_utils::lambert_unit_vector();
         (
             Ray::new(hit.point, target - hit.point),
