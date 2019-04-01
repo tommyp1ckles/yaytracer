@@ -66,7 +66,7 @@ mod material_utils {
     }
 }
 
-pub trait Material {
+pub trait Material: Send + Sync {
     fn reflect(&self, ray: Ray, hit: Hit) -> (Ray, bool);
 }
 

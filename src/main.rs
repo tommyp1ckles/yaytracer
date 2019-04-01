@@ -51,8 +51,8 @@ use cgmath::{
 
 const ANTI_ALIASING_SAMPLE: i32 = 128;
 
-const IMG_WIDTH: usize = 400;
-const IMG_HEIGHT: usize = 200;
+const IMG_WIDTH: usize = 1920;
+const IMG_HEIGHT: usize = 1080;
 const T_MAX: f32 = 10000.0;
 const T_MIN: f32 = 0.001;
 const MAX_RECURSION_SIZE: i32 = 100;
@@ -134,19 +134,26 @@ fn gamma(color: Vector3<f32>, n: f32) -> Vector3<f32> {
     )
 }
 
-use std::sync::Arc;
-
+use std::sync::{Mutex, Arc};
 
 struct World {
     objects: Arc<Vec<Box<Visible>>>,
     materials: Arc<Vec<Box<Material>>>
 }
 
+use std::sync::RwLock;
+
+#[derive(Debug, Copy, Clone)]
+struct PixelMessage {
+    color: Vector3<f32>,
+    index: usize
+}
+
 fn main() {
     println!("Time for some raytracing!");
 
     // Initialize world.
-    let mut materials: Arc<Vec<Box<Material>>> = Arc::new(Vec::new());
+    let mut materials: Vec<Box<Material>> = Vec::new();
     materials.push(Box::new(
         Lambertian::new(),
     ));
@@ -157,7 +164,7 @@ fn main() {
         Lambertian::new(),
     ));
 
-    let mut objects: Arc<Vec<Box<Visible>>> = Arc::new(Vec::new());
+    let mut objects: Vec<Box<Visible>> = Vec::new();
     objects.push(Box::new(
         Sphere::new(
             Vector3::new(0.0, 0.0, -1.0),
@@ -190,6 +197,8 @@ fn main() {
         )
     ));
 
+    let objects = Arc::new(objects);
+    let materials = Arc::new(materials);
     /*objects.push(Box::new(
         Triangle::new(
             Vector3::new(0.0, 0.0, -1.0),
@@ -219,18 +228,27 @@ fn main() {
 
     let n_workers = 8;
     let pool = ThreadPool::new(n_workers);
-    let (tx, rx): (Sender<Vector3<f32>>, Receiver<Vector3<f32>>) = mpsc::channel();
+    let (tx, rx): (Sender<PixelMessage>, Receiver<PixelMessage>) = mpsc::channel();
     for y in (0..IMG_HEIGHT) {
         for x in (0..IMG_WIDTH) {
             //bar.inc(1);
             let index = (y * IMG_WIDTH + x) * 3;
             let u: f32 = x as f32 / IMG_WIDTH as f32;
             let v: f32 = ((IMG_HEIGHT - y) as f32) / IMG_HEIGHT as f32;
-            let sync_world = World{
+            //let world = World{
+            //    materials: materials.clone(),
+            //    objects: objects.clone()
+            //};
+            //let materials_clone = materials.clone();
+            //let materials_clone = materials.clone();
+            let world = World{
                 materials: materials.clone(),
                 objects: objects.clone()
             };
-            pool.execute(move|| {                
+            let tx = tx.clone();
+            pool.execute(move|| {
+                println!("executing ray thread #{}", x + y * IMG_WIDTH);
+                //let materials_clone = Arc::try_unwrap(materials_clone);
                 let mut rng = rand::thread_rng();
                 let mut color = Vector3::new(0.0, 0.0, 0.0);
                 // TODO: Better to just divide the pixel, random leads to strange re
@@ -246,20 +264,30 @@ fn main() {
 
                     // should be fine for concurrency since we're not passing
                     // mutable references.
-                    let sample = trace(r, &sync_world, 0);
+                    let sample = trace(r, &world, 0);
 
                     color += sample;
                 }
 
                 color /= ANTI_ALIASING_SAMPLE as f32;
                 color = gamma(color, 2.0);
-                
-                data[index] = (color.x * 255.99) as u8;
-                data[index+1] = (color.y * 255.99) as u8;
-                data[index+2] = (color.z * 255.99) as u8;
+                tx.send(PixelMessage{
+                    color: color,
+                    index: index
+                }).expect("channel will be there waiting for the pool");
+
             })
         }
     }
+
+    for _ in 0..(IMG_HEIGHT*IMG_WIDTH) {
+        let pm = rx.recv().unwrap();
+        data[pm.index] = (pm.color.x * 255.99) as u8;
+        data[pm.index+1] = (pm.color.y * 255.99) as u8;
+        data[pm.index+2] = (pm.color.z * 255.99) as u8;
+        println!("Just did -> {}", pm.index);
+    }
+
     //bar.finish();
     //process::exit(0x0100);
 
@@ -270,10 +298,10 @@ fn main() {
         IMG_HEIGHT as u32   
     );
 
-    match r {
+    /*match r {
         Ok(v) => println!("Ok, file written",),
         Err(e) => println!("Error writing file: {}", e)
-    }
+    }*/
 
-    let v = Vector3::new(1.0, 2.0, 3.0);
+    //let v = Vector3::new(1.0, 2.0, 3.0);
 }
