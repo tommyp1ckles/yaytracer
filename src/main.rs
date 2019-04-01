@@ -47,6 +47,7 @@ use cgmath::{
     InnerSpace
 };
 
+use std::time::Instant;
 //use material_utils::LambertTable;
 
 const ANTI_ALIASING_SAMPLE: i32 = 128;
@@ -150,6 +151,7 @@ struct PixelMessage {
 }
 
 fn main() {
+    let start = Instant::now();
     println!("Time for some raytracing!");
 
     // Initialize world.
@@ -247,7 +249,7 @@ fn main() {
             };
             let tx = tx.clone();
             pool.execute(move|| {
-                println!("executing ray thread #{}", x + y * IMG_WIDTH);
+                //println!("executing ray thread #{}", x + y * IMG_WIDTH);
                 //let materials_clone = Arc::try_unwrap(materials_clone);
                 let mut rng = rand::thread_rng();
                 let mut color = Vector3::new(0.0, 0.0, 0.0);
@@ -285,7 +287,7 @@ fn main() {
         data[pm.index] = (pm.color.x * 255.99) as u8;
         data[pm.index+1] = (pm.color.y * 255.99) as u8;
         data[pm.index+2] = (pm.color.z * 255.99) as u8;
-        println!("Just did -> {}", pm.index);
+        //println!("Just did -> {}", pm.index);
     }
 
     //bar.finish();
@@ -304,4 +306,5 @@ fn main() {
     }*/
 
     //let v = Vector3::new(1.0, 2.0, 3.0);
+    println!("Raytracing took: {}", start.elapsed().as_secs());
 }
