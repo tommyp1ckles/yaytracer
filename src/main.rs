@@ -27,7 +27,6 @@ use indicatif::{ProgressBar, ProgressStyle};
 
 use rand::{Rng};
 
-//use image::{Rgb};
 use image::RGB;
 
 use image::png::PNGEncoder;
@@ -43,8 +42,8 @@ use std::sync::{Arc};
 
 const ANTI_ALIASING_SAMPLE: i32 = 128;
 
-const IMG_WIDTH: usize = 400;
-const IMG_HEIGHT: usize = 200;
+const IMG_WIDTH: usize = 800;
+const IMG_HEIGHT: usize = 400;
 const T_MAX: f32 = 10000.0;
 const T_MIN: f32 = 0.001;
 const MAX_RECURSION_SIZE: i32 = 100;
@@ -265,7 +264,7 @@ fn main() {
 
     bar.finish();
     let r = write_image(
-        &String::from("output2.png"),
+        &String::from("output3.png"),
         &data,
         IMG_WIDTH as u32,
         IMG_HEIGHT as u32   
