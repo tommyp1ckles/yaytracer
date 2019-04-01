@@ -1,5 +1,6 @@
 extern crate image;
 extern crate rand;
+extern crate threadpool;
 
 mod geometry;
 use geometry::Hit;
@@ -9,6 +10,10 @@ use geometry::{
     Triangle,
     Visible
 };
+
+use threadpool::ThreadPool;
+use std::sync::mpsc::{Sender, Receiver};
+use std::sync::mpsc;
 
 mod materials;
 
@@ -46,8 +51,8 @@ use cgmath::{
 
 const ANTI_ALIASING_SAMPLE: i32 = 128;
 
-const IMG_WIDTH: usize = 400;
-const IMG_HEIGHT: usize = 200;
+const IMG_WIDTH: usize = 1920;
+const IMG_HEIGHT: usize = 1080;
 const T_MAX: f32 = 10000.0;
 const T_MIN: f32 = 0.001;
 const MAX_RECURSION_SIZE: i32 = 100;
@@ -90,11 +95,6 @@ fn gradient_color(r: Ray) -> Vector3<f32> {
     return (1.0-t) * Vector3::new(1.0, 1.0, 1.0) + t * Vector3::new(0.5, 0.7, 1.0);
 }
 
-struct World {
-    objects: Vec<Box<Visible>>,
-    materials: Vec<Box<Material>>
-}
-
 fn trace(r: Ray, world: &World, depth: i32) -> Vector3<f32> {
     if depth >= MAX_RECURSION_SIZE {
         return gradient_color(r);
@@ -132,6 +132,21 @@ fn gamma(color: Vector3<f32>, n: f32) -> Vector3<f32> {
         f32::powf(color.y, i),
         f32::powf(color.z, i)
     )
+}
+
+use std::sync::{Mutex, Arc};
+
+struct World {
+    objects: Arc<Vec<Box<Visible>>>,
+    materials: Arc<Vec<Box<Material>>>
+}
+
+use std::sync::RwLock;
+
+#[derive(Debug, Copy, Clone)]
+struct PixelMessage {
+    color: Vector3<f32>,
+    index: usize
 }
 
 fn main() {
@@ -182,7 +197,8 @@ fn main() {
         )
     ));
 
-
+    let objects = Arc::new(objects);
+    let materials = Arc::new(materials);
     /*objects.push(Box::new(
         Triangle::new(
             Vector3::new(0.0, 0.0, -1.0),
@@ -192,10 +208,10 @@ fn main() {
         )
     ));*/
 
-    let world = World{
+    /*let world: World = World{
         materials: materials,
         objects: objects
-    };
+    };*/
 
     // Note: Have to allocate data to heap in order to not overflow the stack during runtime.
     let mut data = vec![0; 3 * IMG_HEIGHT * IMG_WIDTH];
@@ -210,43 +226,69 @@ fn main() {
         .template("{spinner:.green} [{elapsed_precise}] [{bar:100.cyan/blue}] {pos:>7}/{len:7} Rays ({eta})")
         .progress_chars("#-"));
 
+    let n_workers = 8;
+    let pool = ThreadPool::new(n_workers);
+    let (tx, rx): (Sender<PixelMessage>, Receiver<PixelMessage>) = mpsc::channel();
     for y in (0..IMG_HEIGHT) {
         for x in (0..IMG_WIDTH) {
-            bar.inc(1);
-
+            //bar.inc(1);
             let index = (y * IMG_WIDTH + x) * 3;
             let u: f32 = x as f32 / IMG_WIDTH as f32;
             let v: f32 = ((IMG_HEIGHT - y) as f32) / IMG_HEIGHT as f32;
-            
-            let mut rng = rand::thread_rng();
-            let mut color = Vector3::new(0.0, 0.0, 0.0);
-            // TODO: Better to just divide the pixel, random leads to strange re
-            for sample in 0..ANTI_ALIASING_SAMPLE {
+            //let world = World{
+            //    materials: materials.clone(),
+            //    objects: objects.clone()
+            //};
+            //let materials_clone = materials.clone();
+            //let materials_clone = materials.clone();
+            let world = World{
+                materials: materials.clone(),
+                objects: objects.clone()
+            };
+            let tx = tx.clone();
+            pool.execute(move|| {
+                println!("executing ray thread #{}", x + y * IMG_WIDTH);
+                //let materials_clone = Arc::try_unwrap(materials_clone);
                 let mut rng = rand::thread_rng();
-                let u: f32 = (x as f32 + rng.gen::<f32>()) / IMG_WIDTH as f32;
-                let v: f32 = ((IMG_HEIGHT - y) as f32 + rng.gen::<f32>()) / IMG_HEIGHT as f32;
+                let mut color = Vector3::new(0.0, 0.0, 0.0);
+                // TODO: Better to just divide the pixel, random leads to strange re
+                for sample in 0..ANTI_ALIASING_SAMPLE {
+                    let mut rng = rand::thread_rng();
+                    let u: f32 = (x as f32 + rng.gen::<f32>()) / IMG_WIDTH as f32;
+                    let v: f32 = ((IMG_HEIGHT - y) as f32 + rng.gen::<f32>()) / IMG_HEIGHT as f32;
 
-                let mut r = Ray::new(
-                    origin,
-                    unit_vector(&(lower_left + ((u * horizontal) + (v * vertical))))
-                );
+                    let mut r = Ray::new(
+                        origin,
+                        unit_vector(&(lower_left + ((u * horizontal) + (v * vertical))))
+                    );
 
-                // should be fine for concurrency since we're not passing
-                // mutable references.
-                let sample = trace(r, &world, 0);
+                    // should be fine for concurrency since we're not passing
+                    // mutable references.
+                    let sample = trace(r, &world, 0);
 
-                color += sample;
-            }
+                    color += sample;
+                }
 
-            color /= ANTI_ALIASING_SAMPLE as f32;
-            color = gamma(color, 2.0);
-            
-            data[index] = (color.x * 255.99) as u8;
-            data[index+1] = (color.y * 255.99) as u8;
-            data[index+2] = (color.z * 255.99) as u8;
+                color /= ANTI_ALIASING_SAMPLE as f32;
+                color = gamma(color, 2.0);
+                tx.send(PixelMessage{
+                    color: color,
+                    index: index
+                }).expect("channel will be there waiting for the pool");
+
+            })
         }
     }
-    bar.finish();
+
+    for _ in 0..(IMG_HEIGHT*IMG_WIDTH) {
+        let pm = rx.recv().unwrap();
+        data[pm.index] = (pm.color.x * 255.99) as u8;
+        data[pm.index+1] = (pm.color.y * 255.99) as u8;
+        data[pm.index+2] = (pm.color.z * 255.99) as u8;
+        println!("Just did -> {}", pm.index);
+    }
+
+    //bar.finish();
     //process::exit(0x0100);
 
     let r = write_image(
@@ -256,10 +298,10 @@ fn main() {
         IMG_HEIGHT as u32   
     );
 
-    match r {
+    /*match r {
         Ok(v) => println!("Ok, file written",),
         Err(e) => println!("Error writing file: {}", e)
-    }
+    }*/
 
-    let v = Vector3::new(1.0, 2.0, 3.0);
+    //let v = Vector3::new(1.0, 2.0, 3.0);
 }
