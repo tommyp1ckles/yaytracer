@@ -14,22 +14,22 @@ use cgmath::{
 
 #[derive(Copy, Clone)]
 pub struct Ray {
-    A: Vector3<f32>,
-    B: Vector3<f32>,
+    a: Vector3<f32>,
+    b: Vector3<f32>,
 }
 
 impl Ray {
-    pub fn new(A: Vector3<f32>, B: Vector3<f32>) -> Ray {
+    pub fn new(a: Vector3<f32>, b: Vector3<f32>) -> Ray {
         Ray{
-            A: A,
-            B: B,
+            a: a,
+            b: b,
         }
     }
 
-    pub fn origin(&self) -> &Vector3<f32> { &self.A }
-    pub fn direction(&self) -> &Vector3<f32> { &self.B }
+    pub fn origin(&self) -> &Vector3<f32> { &self.a }
+    pub fn direction(&self) -> &Vector3<f32> { &self.b }
     pub fn point(&self, t: f32) -> Vector3<f32> {
-        self.A + (t * self.B)
+        self.a + (t * self.b)
     }
 }
 

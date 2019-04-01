@@ -53,7 +53,7 @@ use std::time::Instant;
 const ANTI_ALIASING_SAMPLE: i32 = 128;
 
 const IMG_WIDTH: usize = 600;
-const IMG_HEIGHT: usize = 400;
+const IMG_HEIGHT: usize = 300;
 const T_MAX: f32 = 10000.0;
 const T_MIN: f32 = 0.001;
 const MAX_RECURSION_SIZE: i32 = 100;
@@ -233,24 +233,16 @@ fn main() {
     let (tx, rx): (Sender<PixelMessage>, Receiver<PixelMessage>) = mpsc::channel();
     for y in (0..IMG_HEIGHT) {
         for x in (0..IMG_WIDTH) {
-            //bar.inc(1);
             let index = (y * IMG_WIDTH + x) * 3;
             let u: f32 = x as f32 / IMG_WIDTH as f32;
             let v: f32 = ((IMG_HEIGHT - y) as f32) / IMG_HEIGHT as f32;
-            //let world = World{
-            //    materials: materials.clone(),
-            //    objects: objects.clone()
-            //};
-            //let materials_clone = materials.clone();
-            //let materials_clone = materials.clone();
+
             let world = World{
                 materials: materials.clone(),
                 objects: objects.clone()
             };
             let tx = tx.clone();
             pool.execute(move|| {
-                //println!("executing ray thread #{}", x + y * IMG_WIDTH);
-                //let materials_clone = Arc::try_unwrap(materials_clone);
                 let mut rng = rand::thread_rng();
                 let mut color = Vector3::new(0.0, 0.0, 0.0);
                 // TODO: Better to just divide the pixel, random leads to strange re
@@ -282,11 +274,14 @@ fn main() {
         }
     }
 
-    for _ in 0..(IMG_HEIGHT*IMG_WIDTH) {
+    for i in 0..(IMG_HEIGHT*IMG_WIDTH) {
         let pm = rx.recv().unwrap();
         data[pm.index] = (pm.color.x * 255.99) as u8;
         data[pm.index+1] = (pm.color.y * 255.99) as u8;
         data[pm.index+2] = (pm.color.z * 255.99) as u8;
+        if i%1000 == 0 {
+            bar.inc(1000);
+        }
         //println!("Just did -> {}", pm.index);
     }
 
@@ -300,10 +295,10 @@ fn main() {
         IMG_HEIGHT as u32   
     );
 
-    /*match r {
+    match r {
         Ok(v) => println!("Ok, file written",),
         Err(e) => println!("Error writing file: {}", e)
-    }*/
+    }
 
     //let v = Vector3::new(1.0, 2.0, 3.0);
     println!("Raytracing took: {}", start.elapsed().as_secs());
