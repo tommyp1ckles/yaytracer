@@ -7,7 +7,7 @@ use geometry::Hit;
 use geometry::{
     Ray,
     Sphere,
-    //Triangle,
+    Triangle,
     Visible
 };
 
@@ -57,17 +57,6 @@ fn write_image(filename: &String, data: &[u8], width: u32, height: u32) -> io::R
         height,
         RGB(8)
     )
-}
-
-#[cfg(test)]
-mod tests{
-    use super::*;
-
-    #[test]
-    fn test_unit_vector() {
-        let v = unit_vector(&Vector3::new(2.0, 2.0, 2.0));
-        assert_eq!(v.x, 0.57735026);
-    }
 }
 
 fn unit_vector(v: &Vector3<f32>) -> Vector3<f32> {
@@ -152,7 +141,7 @@ fn main() {
     ));
 
     let mut objects: Vec<Box<Visible>> = Vec::new();
-    objects.push(Box::new(
+    /*objects.push(Box::new(
         Sphere::new(
             Vector3::new(0.0, 0.0, -1.0),
             0.5,
@@ -182,20 +171,19 @@ fn main() {
             100.0,
             0
         )
+    ));*/
+
+    objects.push(Box::new(
+        Triangle::new(
+            Vector3::new(-1.0, 0.0, -2.0),
+            Vector3::new(1.0, 0.0, -2.0),
+            Vector3::new(0.0, 2.0, -2.0),
+            0
+        )
     ));
 
     let objects = Arc::new(objects);
     let materials = Arc::new(materials);
-
-    // TODO: Implement Vector Correctly.
-    /*objects.push(Box::new(
-        Triangle::new(
-            Vector3::new(0.0, 0.0, -1.0),
-            Vector3::new(-1.0, 0.0, -1.0),
-            Vector3::new(0.0, -1.0, -1.0),
-            2
-        )
-    ));*/
 
     // Note: Have to allocate data to heap in order to not overflow the stack during runtime.
     let mut data = vec![0; 3 * IMG_HEIGHT * IMG_WIDTH];
@@ -257,14 +245,14 @@ fn main() {
         data[pm.index] = (pm.color.x * 255.99) as u8;
         data[pm.index+1] = (pm.color.y * 255.99) as u8;
         data[pm.index+2] = (pm.color.z * 255.99) as u8;
-        if i%1000 == 0 {
-            bar.inc(1000);
-        }
+        //if i%1000 == 0 {
+        //    bar.inc(1000);
+        //}
     }
 
     bar.finish();
     let r = write_image(
-        &String::from("output3.png"),
+        &String::from("output4.png"),
         &data,
         IMG_WIDTH as u32,
         IMG_HEIGHT as u32   
