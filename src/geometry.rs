@@ -14,22 +14,22 @@ use cgmath::{
 
 #[derive(Copy, Clone)]
 pub struct Ray {
-    A: Vector3<f32>,
-    B: Vector3<f32>,
+    a: Vector3<f32>,
+    b: Vector3<f32>,
 }
 
 impl Ray {
-    pub fn new(A: Vector3<f32>, B: Vector3<f32>) -> Ray {
+    pub fn new(a: Vector3<f32>, b: Vector3<f32>) -> Ray {
         Ray{
-            A: A,
-            B: B,
+            a: a,
+            b: b,
         }
     }
 
-    pub fn origin(&self) -> &Vector3<f32> { &self.A }
-    pub fn direction(&self) -> &Vector3<f32> { &self.B }
+    pub fn origin(&self) -> &Vector3<f32> { &self.a }
+    pub fn direction(&self) -> &Vector3<f32> { &self.b }
     pub fn point(&self, t: f32) -> Vector3<f32> {
-        self.A + (t * self.B)
+        self.a + (t * self.b)
     }
 }
 
@@ -52,6 +52,7 @@ mod tests{
 
 pub trait Visible: Send + Sync {
     fn hit(&self, ray: Ray, t_min: f32, t_max: f32) -> Hit;
+    fn id(&self) -> String;
 }
 
 
@@ -113,12 +114,17 @@ impl Visible for Sphere {
             material: self.material
         }
     }
+
+    fn id(&self) -> String {
+        return String::from("sphere");
+    }
 }
 
 pub struct Triangle {
     v0: Vector3<f32>,
     v1: Vector3<f32>,
     v2: Vector3<f32>,
+    normal: Vector3<f32>,
     material: usize
 }
 
@@ -126,10 +132,14 @@ const EPSILON: f32 = 0.000001;
 
 impl Triangle {
     pub fn new(v0: Vector3<f32>, v1: Vector3<f32>, v2: Vector3<f32>, material: usize) -> Triangle {
+        let v1_sub_v0 = v1 - v0;
+        let v0_sub_v2 = v2 - v0;
+        let norm = v1_sub_v0.cross(v0_sub_v2);
         Triangle{
             v0: v0,
             v1: v1,
             v2: v2,
+            normal: norm,
             material: material
         }
     }
@@ -155,12 +165,15 @@ impl Visible for Triangle {
                 t: 0.0,
                 point: Vector3::new(0.0, 0.0, 0.0),
                 norm: Vector3::new(0.0, 0.0, 0.0),
-                material: self.material              
+                material: self.material
             };
         }
 
+        //
+        //let invDet = 1.0 / det;
         let tvec = ray.origin() - self.v0;
         let mut u = tvec.dot(pvec);
+        //let mut u = tvec.dot(pvec) * invDet;
 
         if u < 0.0 || u > det {
             return Hit{
@@ -193,16 +206,67 @@ impl Visible for Triangle {
         u *= inv_det;
         v *= inv_det;
 
-        // T(u, v) = (1 - u - v)*V0 + u*V1 + uV2
+        if t > t_max || t < t_min {
+            return Hit{
+                is_hit: false,
+                t: 0.0,
+                point: Vector3::new(0.0, 0.0, 0.0),
+                norm: Vector3::new(0.0, 0.0, 0.0),
+                material: self.material              
+            }               
+        }
 
         Hit{
-            is_hit: false,
+            is_hit: true,
             t: t,
-            // TODO: !!!!!!!!!!!!!!!
-            // TODO: !!!!!!!!!!!!!!!
             point: ray.origin() + t*ray.direction(),
-            norm: Vector3::new(0.0, 0.0, 0.0),
+            norm: self.normal,
             material: self.material                  
         }
     }
+
+    fn id(&self) -> String {
+        return String::from("triangle");
+    }
 }
+
+
+// #[cfg(test)]
+// mod geometry_tests {
+//     use super::*;
+//     use std::io::Write;
+//     #[test]
+//     fn test_triangle() {
+//         let s = Sphere::new(
+//             Vector3::new(0.0, 0.0, -1.0),
+//             0.5,
+//             0
+//         );
+//         let t = Triangle::new(
+//             Vector3::new(-1.0, 0.0, -2.0),
+//             Vector3::new(1.0, 0.0, -2.0),
+//             Vector3::new(0.0, 2.0, -2.0),
+//             0
+//         );
+//         // The ray moves along x = 0 so p.x = 0.0.
+//         // So the triangle is parallel to z = -1.0 so p.z = -1.0.
+//         let mut d = Vector3::new(1.0, 0.0, -2.0);
+//         let l = (d.x*d.x + d.y*d.y + d.z*d.z as f32).sqrt();
+//         d /= l;
+//         let r = Ray::new(
+//             Vector3::new(0.0, 0.0, 0.0),
+//             //Vector3::new(0.0, 1.0, -2.0)
+//             d
+//         );
+//         //let r = unit_vector(Vector3::new(0.0, 1.0, -2.0));
+//         let mut stderr = std::io::stderr();
+//         let hit = t.hit(r, 0.00001, 100.0);
+//         writeln!(&mut stderr, "{}", format!("[Triangle]    hit -> {} {:?} : {:?}", hit.is_hit, hit.norm, hit.point));
+//         let hit = s.hit(r, 0.00001, 100.0);
+//         writeln!(&mut stderr, "\n{}", format!("[Sphere]      hit -> {} {:?} : {:?}", hit.is_hit, hit.norm, hit.point));
+//         //let hit = s.hit(r, 0.00001, 100.0);
+//         //println!("2. hit -> {} : {:?} : {:?}", hit.is_hit, hit.point, hit.norm);
+//         //let mut stderr = std::io::stderr();
+//         //writeln!(&mut stderr, "{}", format!("\nhit -> {:?} : {:?}\n", hit.point, hit.norm)).unwrap();
+//     }
+// }
