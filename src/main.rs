@@ -40,10 +40,10 @@ use cgmath::{
 
 use std::sync::{Arc};
 
-const ANTI_ALIASING_SAMPLE: i32 = 128;
+const ANTI_ALIASING_SAMPLE: i32 = 64;
 
-const IMG_WIDTH: usize = 800;
-const IMG_HEIGHT: usize = 400;
+const IMG_WIDTH: usize = 2560;
+const IMG_HEIGHT: usize = 1440;
 const T_MAX: f32 = 10000.0;
 const T_MIN: f32 = 0.001;
 const MAX_RECURSION_SIZE: i32 = 100;
@@ -75,11 +75,7 @@ fn gradient_color(r: Ray) -> Vector3<f32> {
     return (1.0-t) * Vector3::new(1.0, 1.0, 1.0) + t * Vector3::new(0.5, 0.7, 1.0);
 }
 
-fn trace(r: Ray, world: &World, depth: i32) -> Vector3<f32> {
-    if depth >= MAX_RECURSION_SIZE {
-        return gradient_color(r);
-    }
-
+fn search(r: Ray, world: &World) -> Hit {
     let mut hit = Hit{
         is_hit: false,
         t: 0.0,
@@ -87,7 +83,7 @@ fn trace(r: Ray, world: &World, depth: i32) -> Vector3<f32> {
         norm: Vector3::new(0.0, 0.0, 0.0),
         material: 0
     };
-    let mut closest = T_MAX; 
+    let mut closest = T_MAX;
     let mut hit_exists = false;
     for object in world.objects.iter() {
         let tmp_hit = object.hit(r, T_MIN, closest);
@@ -98,7 +94,16 @@ fn trace(r: Ray, world: &World, depth: i32) -> Vector3<f32> {
         }
     }
 
-    if hit_exists {
+    hit
+}
+
+fn trace(r: Ray, world: &World, depth: i32) -> Vector3<f32> {
+    if depth >= MAX_RECURSION_SIZE {
+        return gradient_color(r);
+    }
+
+    let hit = search(r, world);
+    if hit.is_hit {
         let (new_ray, _was_reflected) = world.materials[hit.material].reflect(r, hit);
         return 0.5 * trace(new_ray, world, depth+1);
     }
@@ -147,7 +152,7 @@ fn main() {
             0.5,
             0
         )
-    ));
+    ));*/
 
     objects.push(Box::new(
         Sphere::new(
@@ -161,7 +166,7 @@ fn main() {
         Sphere::new(
             Vector3::new(1.0, 0.0, -1.0),
             0.5,
-            1
+            0
         )
     ));
 
@@ -171,13 +176,13 @@ fn main() {
             100.0,
             0
         )
-    ));*/
+    ));
 
     objects.push(Box::new(
         Triangle::new(
-            Vector3::new(-1.0, 0.0, -2.0),
-            Vector3::new(1.0, 0.0, -2.0),
-            Vector3::new(0.0, 2.0, -2.0),
+            Vector3::new(-10.0, -2.0, -3.0),
+            Vector3::new(10.0, -2.0, -3.0),
+            Vector3::new(0.0, 5.0, -1.0),
             0
         )
     ));
@@ -245,9 +250,9 @@ fn main() {
         data[pm.index] = (pm.color.x * 255.99) as u8;
         data[pm.index+1] = (pm.color.y * 255.99) as u8;
         data[pm.index+2] = (pm.color.z * 255.99) as u8;
-        //if i%1000 == 0 {
-        //    bar.inc(1000);
-        //}
+        if i%1000 == 0 {
+            bar.inc(1000);
+        }
     }
 
     bar.finish();
@@ -261,5 +266,47 @@ fn main() {
     match r {
         Ok(_v) => println!("Ok, file written",),
         Err(e) => println!("Error writing file: {}", e)
+    }
+}
+
+#[cfg(test)]
+mod geometry_tests {
+    use super::*;
+    use std::io::Write;
+    #[test]
+    fn test_triangle() {        
+        let mut objects: Vec<Box<Visible>> = Vec::new();
+        objects.push(Box::new(
+            Sphere::new(
+                Vector3::new(0.0, 0.0, -1.0),
+                0.5,
+                1
+            )
+        ));
+
+        objects.push(Box::new(
+            Triangle::new(
+                Vector3::new(-4.0, -2.0, -3.0),
+                Vector3::new(4.0, -2.0, -3.0),
+                Vector3::new(0.0, 4.0, -3.0),
+                2
+            )
+        ));
+
+        let mut d = Vector3::new(0.0, 1.0, -2.0);
+        let l = (d.x*d.x + d.y*d.y + d.z*d.z as f32).sqrt();
+        d /= l;
+        let r = Ray::new(
+            Vector3::new(0.0, 0.0, 0.0),
+            d
+        );
+        let mut materials: Vec<Box<Material>> = Vec::new();
+        let world = World{
+            objects: Arc::new(objects),
+            materials: Arc::new(materials)
+        };
+        let hit = search(r, &world);
+        assert_eq!(hit.is_hit, true);
+        assert_eq!(hit.t, 0.6708204);
     }
 }

@@ -52,6 +52,7 @@ mod tests{
 
 pub trait Visible: Send + Sync {
     fn hit(&self, ray: Ray, t_min: f32, t_max: f32) -> Hit;
+    fn id(&self) -> String;
 }
 
 
@@ -112,6 +113,10 @@ impl Visible for Sphere {
             norm: Vector3::new(0.0, 0.0, 0.0),
             material: self.material
         }
+    }
+
+    fn id(&self) -> String {
+        return String::from("sphere");
     }
 }
 
@@ -201,56 +206,67 @@ impl Visible for Triangle {
         u *= inv_det;
         v *= inv_det;
 
-        // T(u, v) = (1 - u - v)*V0 + u*V1 + uV2
-        // calculate surface normal
-        //let cross_ab = self.v0.cross(self.v1);
+        if t > t_max || t < t_min {
+            return Hit{
+                is_hit: false,
+                t: 0.0,
+                point: Vector3::new(0.0, 0.0, 0.0),
+                norm: Vector3::new(0.0, 0.0, 0.0),
+                material: self.material              
+            }               
+        }
+
         Hit{
-            is_hit: false,
+            is_hit: true,
             t: t,
-            // TODO: !!!!!!!!!!!!!!!
-            // TODO: !!!!!!!!!!!!!!!
             point: ray.origin() + t*ray.direction(),
-            //norm: cross_ab - (ray.origin() + t*ray.direction()),
             norm: self.normal,
             material: self.material                  
         }
     }
-}
 
-
-#[cfg(test)]
-mod geometry_tests {
-    use super::*;
-    use std::io::Write;
-    #[test]
-    fn test_triangle() {
-        let s = Sphere::new(
-            Vector3::new(0.0, 0.0, -1.0),
-            0.5,
-            0
-        );
-        let t = Triangle::new(
-            Vector3::new(-1.0, 0.0, -2.0),
-            Vector3::new(1.0, 0.0, -2.0),
-            Vector3::new(0.0, 2.0, -2.0),
-            0
-        );
-        // The ray moves along x = 0 so p.x = 0.0.
-        // So the triangle is parallel to z = -1.0 so p.z = -1.0.
-        let mut d = Vector3::new(0.0, 1.0, -2.0);
-        let l = (d.x*d.x + d.y*d.y + d.z*d.z as f32).sqrt();
-        d /= l;
-        let r = Ray::new(
-            Vector3::new(0.0, 0.0, 0.0),
-            //Vector3::new(0.0, 1.0, -2.0)
-            d
-        );
-        //let r = unit_vector(Vector3::new(0.0, 1.0, -2.0));
-        let hit = t.hit(r, 0.00001, 100.0);
-        println!("hit -> {} : {:?}", hit.is_hit, hit.point);
-        //let hit = s.hit(r, 0.00001, 100.0);
-        //println!("2. hit -> {} : {:?} : {:?}", hit.is_hit, hit.point, hit.norm);
-        let mut stderr = std::io::stderr();
-        writeln!(&mut stderr, "{}", format!("\nhit -> {:?} : {:?}\n", hit.point, hit.norm)).unwrap();
+    fn id(&self) -> String {
+        return String::from("triangle");
     }
 }
+
+
+// #[cfg(test)]
+// mod geometry_tests {
+//     use super::*;
+//     use std::io::Write;
+//     #[test]
+//     fn test_triangle() {
+//         let s = Sphere::new(
+//             Vector3::new(0.0, 0.0, -1.0),
+//             0.5,
+//             0
+//         );
+//         let t = Triangle::new(
+//             Vector3::new(-1.0, 0.0, -2.0),
+//             Vector3::new(1.0, 0.0, -2.0),
+//             Vector3::new(0.0, 2.0, -2.0),
+//             0
+//         );
+//         // The ray moves along x = 0 so p.x = 0.0.
+//         // So the triangle is parallel to z = -1.0 so p.z = -1.0.
+//         let mut d = Vector3::new(1.0, 0.0, -2.0);
+//         let l = (d.x*d.x + d.y*d.y + d.z*d.z as f32).sqrt();
+//         d /= l;
+//         let r = Ray::new(
+//             Vector3::new(0.0, 0.0, 0.0),
+//             //Vector3::new(0.0, 1.0, -2.0)
+//             d
+//         );
+//         //let r = unit_vector(Vector3::new(0.0, 1.0, -2.0));
+//         let mut stderr = std::io::stderr();
+//         let hit = t.hit(r, 0.00001, 100.0);
+//         writeln!(&mut stderr, "{}", format!("[Triangle]    hit -> {} {:?} : {:?}", hit.is_hit, hit.norm, hit.point));
+//         let hit = s.hit(r, 0.00001, 100.0);
+//         writeln!(&mut stderr, "\n{}", format!("[Sphere]      hit -> {} {:?} : {:?}", hit.is_hit, hit.norm, hit.point));
+//         //let hit = s.hit(r, 0.00001, 100.0);
+//         //println!("2. hit -> {} : {:?} : {:?}", hit.is_hit, hit.point, hit.norm);
+//         //let mut stderr = std::io::stderr();
+//         //writeln!(&mut stderr, "{}", format!("\nhit -> {:?} : {:?}\n", hit.point, hit.norm)).unwrap();
+//     }
+// }
