@@ -44,7 +44,7 @@ use cgmath::{
 
 use std::sync::{Arc};
 
-const ANTI_ALIASING_SAMPLE: i32 = 8;
+const ANTI_ALIASING_SAMPLE: i32 = 32;
 
 const IMG_WIDTH: usize = 800;
 const IMG_HEIGHT: usize = 400;
@@ -66,15 +66,33 @@ fn write_image(filename: &String, data: &[u8], width: u32, height: u32) -> io::R
 use std::f32;
 
 fn parse_vertex(s: &str) -> Vector3<f32> {
-    let mut iter = s.split(",");
+    let mut iter = s.trim().split_whitespace();
+    iter.next();
     let x_str = iter.next().expect("x column should exist");
     let y_str = iter.next().expect("y column should exist");
     let z_str = iter.next().expect("z column should exist");
-    println!("=> {} {} {}", x_str, y_str, z_str);
     let x: f32 = x_str.trim().parse().expect("x should parse");
     let y: f32 = y_str.trim().parse().expect("y should parse");
     let z: f32 = z_str.trim().parse().expect("z should parse");
-    Vector3::new(x, y, z)
+    Vector3::new(x, y, z) - Vector3::new(0.0, 0.5, 4.0)
+}
+
+fn create_face<'a>(s: &str, vl: &'a Vec<Vector3<f32>>) -> Triangle {
+    let mut iter = s.split_whitespace();
+    iter.next().expect("Identifier token should exist");
+    let i_str = iter.next().expect("i column should exist");
+    let j_str = iter.next().expect("j column should exist");
+    let k_str = iter.next().expect("k column should exist");
+    let i: usize = i_str.trim().parse().expect("i should parse");
+    let j: usize = j_str.trim().parse().expect("j should parse");
+    let k: usize = k_str.trim().parse().expect("k should parse");
+
+    Triangle::new(
+        vl[i-1],
+        vl[j-1],
+        vl[k-1],
+        0
+    )
 }
 
 fn read_vertex_file(filename: String, objs: &mut Vec<Box<Visible>>) {
@@ -83,28 +101,22 @@ fn read_vertex_file(filename: String, objs: &mut Vec<Box<Visible>>) {
     let mut v1: Vector3<f32>;
     let mut v2: Vector3<f32>;
     let mut line_iter = contents.split("\n");
-    loop {
-        let l0 = line_iter.next();
-        let l1 = line_iter.next();
-        let l2 = line_iter.next();
-        match l0 {
-            Some(v) => v0 = parse_vertex(v),
-            None => break,
+
+    let mut vec_list: Vec<Vector3<f32>> = Vec::new();
+
+    for line in line_iter {
+        let line = line.trim();
+        let tok0: char;
+        match line.chars().nth(0) {
+            Some(v) => tok0 = v,
+            None => continue
         }
-        match l1 {
-            Some(v) => v1 = parse_vertex(v),
-            None => break,
-        }
-        match l2 {
-            Some(v) => v2 = parse_vertex(v),
-            None => break,
-        }
-        v0 += Vector3::new(1.0, 1.0, -3.0);
-        v1 += Vector3::new(1.0, 1.0, -3.0);
-        v2 += Vector3::new(1.0, 1.0, -3.0);
-        objs.push(Box::new(
-            Triangle::new(v0, v1, v2, 1)
-        ))
+        match tok0 {
+            '#' => println!("Comment: {}", tok0),
+            'v' => vec_list.push(parse_vertex(line)),
+            'f' => objs.push(Box::new(create_face(line, &vec_list))),
+            _ => println!("Unexpected token: {}", tok0)
+        }        
     }
 }
 
@@ -195,14 +207,14 @@ fn main() {
     ));
 
     let mut objects: Vec<Box<Visible>> = Vec::new();
-    //read_vertex_file(String::from("vertices.txt"), &mut objects);
-    objects.push(Box::new(
+    read_vertex_file(String::from("vertices.txt"), &mut objects);
+    /*objects.push(Box::new(
         Sphere::new(
             Vector3::new(0.0, 1.0, -3.0),
             0.5,
             0
         )
-    ));
+    ));*/
 
     /*objects.push(Box::new(
         Sphere::new(
@@ -218,24 +230,23 @@ fn main() {
             0.5,
             0
         )
-    ));
-
+    ));*/
     objects.push(Box::new(
         Sphere::new(
             Vector3::new(0.0, -100.5, -1.0),
             100.0,
-            0
+            1
         )
-    ));*/
+    ));
 
-    /*objects.push(Box::new(
+    objects.push(Box::new(
         Triangle::new(
             Vector3::new(-10.0, -2.0, -3.0),
             Vector3::new(10.0, -2.0, -3.0),
             Vector3::new(0.0, 5.0, -1.0),
             0
         )
-    ));*/
+    ));
 
     /*objects.push(Box::new(
         Triangle::new(
@@ -258,14 +269,38 @@ fn main() {
     //0.605600,-1.200000,-0.355700
     //0.598800,-1.243700,-0.351700
 
-    objects.push(Box::new(
+    /*objects.push(Box::new(
         Triangle::new(
-            Vector3::new(-1.0, 0.0, -1.0) * 5.0,
-            Vector3::new(1.0, 0.0, -1.0) * 5.0,
-            Vector3::new(0.0, 2.0, -1.0) * 5.0,
+            Vector3::new(0.0, 0.0, 0.0),
+            Vector3::new(0.0, 0.0, -1.0),
+            Vector3::new(0.0, 1.0, 0.0),
             0
         )
     ));
+    objects.push(Box::new(
+        Triangle::new(
+            Vector3::new(0.0, 1.0, -1.0),
+            Vector3::new(1.0, 0.0, 0.0),
+            Vector3::new(1.0, 0.0, -1.0),
+            0
+        )
+    ));*/
+    /*objects.push(Box::new(
+        Triangle::new(
+            Vector3::new(-1.0, 0.0, -1.0),
+            Vector3::new(1.0, 0.0, -1.0),
+            Vector3::new(-1.0, 1.0, -1.0),
+            0
+        )
+    ));*/
+    /*objects.push(Box::new(
+        Triangle::new(
+            Vector3::new(-1.0, 0.0, -1.0),
+            Vector3::new(1.0, 0.0, -1.0),
+            Vector3::new(0.0, 1.0, -2.0),
+            0
+        )
+    ));*/
 
     let objects = Arc::new(objects);
     let materials = Arc::new(materials);
