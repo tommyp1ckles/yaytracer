@@ -10,33 +10,25 @@ use geometry::{
     Triangle,
     Visible
 };
-
 use threadpool::ThreadPool;
 use std::sync::mpsc::{Sender, Receiver};
 use std::sync::mpsc;
-
 mod materials;
-
 use materials::{
     Material,
     Lambertian,
     Metal
 };
-
 use indicatif::{ProgressBar, ProgressStyle};
-
 use rand::{Rng};
-
+use std::f32;
 use image::RGB;
-
 use image::png::PNGEncoder;
 use std::fs::File;
-
 use std::{
     io,
     fs
 };
-
 use cgmath::{
     Vector3,
     Matrix3
@@ -46,7 +38,7 @@ use std::sync::{Arc};
 
 const ANTI_ALIASING_SAMPLE: i32 = 32;
 
-const IMG_WIDTH: usize = 800;
+const IMG_WIDTH: usize = 600;
 const IMG_HEIGHT: usize = 400;
 const T_MAX: f32 = 10000.0;
 const T_MIN: f32 = 0.001;
@@ -63,7 +55,10 @@ fn write_image(filename: &String, data: &[u8], width: u32, height: u32) -> io::R
     )
 }
 
-use std::f32;
+fn get_vertex_index_str(token: &str) -> &str {
+    let tokens = token.split("/").collect::<Vec<&str>>();
+    tokens[0]
+}
 
 fn parse_vertex(s: &str) -> Vector3<f32> {
     let mut iter = s.trim().split_whitespace();
@@ -74,19 +69,21 @@ fn parse_vertex(s: &str) -> Vector3<f32> {
     let x: f32 = x_str.trim().parse().expect("x should parse");
     let y: f32 = y_str.trim().parse().expect("y should parse");
     let z: f32 = z_str.trim().parse().expect("z should parse");
-    Vector3::new(x, y, z) - Vector3::new(0.0, 0.5, 4.0)
+    Vector3::new(x, y, z)
 }
 
 fn create_face<'a>(s: &str, vl: &'a Vec<Vector3<f32>>) -> Triangle {
     let mut iter = s.split_whitespace();
     iter.next().expect("Identifier token should exist");
     let i_str = iter.next().expect("i column should exist");
+    let i_str = get_vertex_index_str(i_str);
     let j_str = iter.next().expect("j column should exist");
+    let j_str = get_vertex_index_str(j_str);
     let k_str = iter.next().expect("k column should exist");
+    let k_str = get_vertex_index_str(k_str);
     let i: usize = i_str.trim().parse().expect("i should parse");
     let j: usize = j_str.trim().parse().expect("j should parse");
     let k: usize = k_str.trim().parse().expect("k should parse");
-
     Triangle::new(
         vl[i-1],
         vl[j-1],
@@ -207,100 +204,15 @@ fn main() {
     ));
 
     let mut objects: Vec<Box<Visible>> = Vec::new();
-    read_vertex_file(String::from("vertices.txt"), &mut objects);
-    /*objects.push(Box::new(
-        Sphere::new(
-            Vector3::new(0.0, 1.0, -3.0),
-            0.5,
-            0
-        )
-    ));*/
+    read_vertex_file(String::from("vertices1.txt"), &mut objects);
 
-    /*objects.push(Box::new(
+    objects.push(Box::new(
         Sphere::new(
-            Vector3::new(-1.0, 0.0, -1.0),
-            0.5,
+            Vector3::new(0.0, -50.5, -1.0),
+            50.0,
             1
         )
     ));
-
-    objects.push(Box::new(
-        Sphere::new(
-            Vector3::new(1.0, 0.0, -1.0),
-            0.5,
-            0
-        )
-    ));*/
-    objects.push(Box::new(
-        Sphere::new(
-            Vector3::new(0.0, -100.5, -1.0),
-            100.0,
-            1
-        )
-    ));
-
-    objects.push(Box::new(
-        Triangle::new(
-            Vector3::new(-10.0, -2.0, -3.0),
-            Vector3::new(10.0, -2.0, -3.0),
-            Vector3::new(0.0, 5.0, -1.0),
-            0
-        )
-    ));
-
-    /*objects.push(Box::new(
-        Triangle::new(
-            Vector3::new(-10.0, -1.0, -3.0),
-            Vector3::new(10.0, -1.0, -3.0),
-            Vector3::new(0.0, 1.0, -1.0),
-            0
-        )
-    ));*/
-
-    /*objects.push(Box::new(
-    Triangle::new(
-            Vector3::new(-10.0, -1.0, -3.0),
-            Vector3::new(10.0, -1.0, -3.0),
-            Vector3::new(0.0, 1.0, -1.0),
-            0
-        )
-    ));*/
-    //0.700000,-1.200000,0.000000
-    //0.605600,-1.200000,-0.355700
-    //0.598800,-1.243700,-0.351700
-
-    /*objects.push(Box::new(
-        Triangle::new(
-            Vector3::new(0.0, 0.0, 0.0),
-            Vector3::new(0.0, 0.0, -1.0),
-            Vector3::new(0.0, 1.0, 0.0),
-            0
-        )
-    ));
-    objects.push(Box::new(
-        Triangle::new(
-            Vector3::new(0.0, 1.0, -1.0),
-            Vector3::new(1.0, 0.0, 0.0),
-            Vector3::new(1.0, 0.0, -1.0),
-            0
-        )
-    ));*/
-    /*objects.push(Box::new(
-        Triangle::new(
-            Vector3::new(-1.0, 0.0, -1.0),
-            Vector3::new(1.0, 0.0, -1.0),
-            Vector3::new(-1.0, 1.0, -1.0),
-            0
-        )
-    ));*/
-    /*objects.push(Box::new(
-        Triangle::new(
-            Vector3::new(-1.0, 0.0, -1.0),
-            Vector3::new(1.0, 0.0, -1.0),
-            Vector3::new(0.0, 1.0, -2.0),
-            0
-        )
-    ));*/
 
     let objects = Arc::new(objects);
     let materials = Arc::new(materials);
