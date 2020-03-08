@@ -10,40 +10,36 @@ use geometry::{
     Triangle,
     Visible
 };
-
 use threadpool::ThreadPool;
 use std::sync::mpsc::{Sender, Receiver};
 use std::sync::mpsc;
-
 mod materials;
-
 use materials::{
     Material,
     Lambertian,
     Metal
 };
-
 use indicatif::{ProgressBar, ProgressStyle};
-
 use rand::{Rng};
-
+use std::f32;
 use image::RGB;
-
 use image::png::PNGEncoder;
 use std::fs::File;
-
-use std::io;
-
+use std::{
+    io,
+    fs
+};
 use cgmath::{
     Vector3,
+    Matrix3
 };
 
 use std::sync::{Arc};
 
-const ANTI_ALIASING_SAMPLE: i32 = 64;
+const ANTI_ALIASING_SAMPLE: i32 = 32;
 
-const IMG_WIDTH: usize = 2560;
-const IMG_HEIGHT: usize = 1440;
+const IMG_WIDTH: usize = 600;
+const IMG_HEIGHT: usize = 400;
 const T_MAX: f32 = 10000.0;
 const T_MIN: f32 = 0.001;
 const MAX_RECURSION_SIZE: i32 = 100;
@@ -57,6 +53,68 @@ fn write_image(filename: &String, data: &[u8], width: u32, height: u32) -> io::R
         height,
         RGB(8)
     )
+}
+
+fn get_vertex_index_str(token: &str) -> &str {
+    let tokens = token.split("/").collect::<Vec<&str>>();
+    tokens[0]
+}
+
+fn parse_vertex(s: &str) -> Vector3<f32> {
+    let mut iter = s.trim().split_whitespace();
+    iter.next();
+    let x_str = iter.next().expect("x column should exist");
+    let y_str = iter.next().expect("y column should exist");
+    let z_str = iter.next().expect("z column should exist");
+    let x: f32 = x_str.trim().parse().expect("x should parse");
+    let y: f32 = y_str.trim().parse().expect("y should parse");
+    let z: f32 = z_str.trim().parse().expect("z should parse");
+    Vector3::new(x, y, z)
+}
+
+fn create_face<'a>(s: &str, vl: &'a Vec<Vector3<f32>>) -> Triangle {
+    let mut iter = s.split_whitespace();
+    iter.next().expect("Identifier token should exist");
+    let i_str = iter.next().expect("i column should exist");
+    let i_str = get_vertex_index_str(i_str);
+    let j_str = iter.next().expect("j column should exist");
+    let j_str = get_vertex_index_str(j_str);
+    let k_str = iter.next().expect("k column should exist");
+    let k_str = get_vertex_index_str(k_str);
+    let i: usize = i_str.trim().parse().expect("i should parse");
+    let j: usize = j_str.trim().parse().expect("j should parse");
+    let k: usize = k_str.trim().parse().expect("k should parse");
+    Triangle::new(
+        vl[i-1],
+        vl[j-1],
+        vl[k-1],
+        0
+    )
+}
+
+fn read_vertex_file(filename: String, objs: &mut Vec<Box<Visible>>) {
+    let contents = fs::read_to_string(filename).expect("Read in string");
+    let mut v0: Vector3<f32>;
+    let mut v1: Vector3<f32>;
+    let mut v2: Vector3<f32>;
+    let mut line_iter = contents.split("\n");
+
+    let mut vec_list: Vec<Vector3<f32>> = Vec::new();
+
+    for line in line_iter {
+        let line = line.trim();
+        let tok0: char;
+        match line.chars().nth(0) {
+            Some(v) => tok0 = v,
+            None => continue
+        }
+        match tok0 {
+            '#' => println!("Comment: {}", tok0),
+            'v' => vec_list.push(parse_vertex(line)),
+            'f' => objs.push(Box::new(create_face(line, &vec_list))),
+            _ => println!("Unexpected token: {}", tok0)
+        }        
+    }
 }
 
 fn unit_vector(v: &Vector3<f32>) -> Vector3<f32> {
@@ -146,44 +204,13 @@ fn main() {
     ));
 
     let mut objects: Vec<Box<Visible>> = Vec::new();
-    /*objects.push(Box::new(
-        Sphere::new(
-            Vector3::new(0.0, 0.0, -1.0),
-            0.5,
-            0
-        )
-    ));*/
+    read_vertex_file(String::from("vertices1.txt"), &mut objects);
 
     objects.push(Box::new(
         Sphere::new(
-            Vector3::new(-1.0, 0.0, -1.0),
-            0.5,
+            Vector3::new(0.0, -50.5, -1.0),
+            50.0,
             1
-        )
-    ));
-
-    objects.push(Box::new(
-        Sphere::new(
-            Vector3::new(1.0, 0.0, -1.0),
-            0.5,
-            0
-        )
-    ));
-
-    objects.push(Box::new(
-        Sphere::new(
-            Vector3::new(0.0, -100.5, -1.0),
-            100.0,
-            0
-        )
-    ));
-
-    objects.push(Box::new(
-        Triangle::new(
-            Vector3::new(-10.0, -2.0, -3.0),
-            Vector3::new(10.0, -2.0, -3.0),
-            Vector3::new(0.0, 5.0, -1.0),
-            0
         )
     ));
 
